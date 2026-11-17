@@ -76,7 +76,9 @@ class PlaybackSession extends ChangeNotifier {
       // - 0 秒重置或仅时长元数据不算证据；
       // - 位置必须落在当前续播目标/起点窗口内，旧集迟到的 183 秒
       //   （新集目标 0 秒）不能清除失败新集的待定错误。
-      if (_ambiguousLoadError != null && _isValidProgressEvidence(value)) {
+      if (_ambiguousLoadError != null) {
+        // 被拒绝的位置不能移动确认窗口，也不能成为重试起点。
+        if (!_isValidProgressEvidence(value)) return;
         _ambiguousErrorTimer?.cancel();
         _ambiguousLoadError = null;
         notifyListeners();
@@ -271,6 +273,8 @@ class PlaybackSession extends ChangeNotifier {
           );
           return;
         }
+        // 已有待定错误时，open 返回时的快照也可能属于旧媒体。
+        if (ambiguous != null) return;
         if (_resumePending) {
           // 某些后端会在 open() 返回前已把位置放到目标附近。
           _handlePendingPosition(player.state.position);

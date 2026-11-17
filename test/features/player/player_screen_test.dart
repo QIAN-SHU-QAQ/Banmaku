@@ -606,7 +606,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });
-  testWidgets('旧集 183 秒晚到且新集未播出：历史保持第 2 集 182 秒', (tester) async {
+  testWidgets('两条旧集位置晚到且新集未播出：历史保持第 2 集 182 秒', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final db = DatabaseService()..resetForTest();
     await db.init();
@@ -677,8 +677,10 @@ void main() {
     platform.gate!.complete();
     await tester.pumpAndSettle();
 
-    // 第 2 集迟到的 183 秒位置不能当成第 3 集证据。
+    // 第 2 集连续迟到的两个位置都不能当成第 3 集证据。
     platform.emitPosition(const Duration(seconds: 183));
+    await tester.pump();
+    platform.emitPosition(const Duration(seconds: 184));
     await tester.pump();
     await tester.pump(const Duration(seconds: 16));
     await tester.pumpAndSettle();

@@ -660,7 +660,7 @@ void main() {
     expect(session.ready, true);
     expect(session.error, isNull);
   });
-  test('旧集迟到的正位置不能清除失败新集的待定错误', () async {
+  test('拒绝旧集位置后重试仍从新集原始起点加载', () async {
     await session.close();
     platform = FakePlatform();
     session = makeSession(
@@ -688,6 +688,9 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 150));
     expect(session.ready, false);
     expect(session.error, contains('Failed to recognize file format.'));
+
+    await session.open();
+    expect(platform.starts.last, isNull);
   });
 
   test('新集开始播放后，明确属于旧集的迟到错误仍被隔离', () async {
