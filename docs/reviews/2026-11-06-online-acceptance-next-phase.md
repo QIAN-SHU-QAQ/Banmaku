@@ -32,7 +32,7 @@
 - [ ] 执行 `flutter test test/features/player/playback_session_test.dart test/features/player/player_screen_test.dart test/home_layout_test.dart test/services/history_resume_test.dart`。专项测试通过后跑完整测试、分析和 Windows Release 构建。
 - [ ] Windows 实机用两种样本确认。用可控源模拟旧地址失效和新地址替换，再用公开在线 HLS 验证原生起点。首页、历史、收藏分别从第 2 集约 180 秒继续，首次稳定画面位置落在 178–185 秒，历史随后向前写入。失败或取消时保持原进度。现有配置桥重连及 20 秒旧记录保护、主动回退 5 秒的回归同时通过。
 
-**发布门槛** 当前版本的在线续播会覆盖历史进度。预览版以 PR 1 的原生实机证据作为放行条件。
+**发布门槛进展（2026-11-17）** #14 已合入，打开首页、历史和收藏的第 2 集续播入口均通过 Windows 验收，首次历史写回分别为 182566、182633 和 182500 ms。首个预览版仍待干净 Windows 环境验收。[合并记录](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/14) · [实机批准记录](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/14#pullrequestreview-5934123910)
 
 ## PR 2 · P1 · 外部资料失败可见，手动纠正可达
 
