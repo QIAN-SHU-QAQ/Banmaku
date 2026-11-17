@@ -721,6 +721,34 @@ void main() {
     expect(session.ready, false);
     expect(session.error, contains('HTTP 403'));
   });
+  test('切集错误按完整地址区分带查询参数的旧集和新集', () async {
+    await session.close();
+    platform = FakePlatform();
+    const previous = 'https://example.test/live.m3u8?episode=1';
+    const current = 'https://example.test/live.m3u8';
+    session = PlaybackSession(
+      player: Player(platformPlayer: platform),
+      initialUrl: previous,
+      initialTitle: 'Show',
+      episodes: const [
+        {'title': 'One', 'url': previous},
+        {'title': 'Two', 'url': current},
+      ],
+    );
+    await session.open();
+    await session.switchEpisode(1);
+
+    platform.emitError('Failed to open $previous: HTTP 403');
+    await pumpEventQueue();
+    expect(session.ready, true);
+    expect(session.error, isNull);
+
+    platform.emitError('Failed to open $current: HTTP 403');
+    await pumpEventQueue();
+    expect(session.ready, false);
+    expect(session.error, contains('HTTP 403'));
+  });
+
   test(
     'close while opening suppresses callbacks and disposes after open',
     () async {

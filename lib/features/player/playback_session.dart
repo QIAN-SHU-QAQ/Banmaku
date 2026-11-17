@@ -43,14 +43,20 @@ class PlaybackSession extends ChangeNotifier {
       final superseded = _supersededUrl;
       final hasSuperseded =
           superseded != null && superseded.isNotEmpty && superseded != current;
-      if (hasSuperseded &&
-          message.contains(superseded) &&
-          !message.contains(current)) {
+      final mentionsSuperseded = hasSuperseded && message.contains(superseded);
+      // 旧地址带查询参数时，不能把其中的短地址也算作新媒体报错。
+      final currentMessage =
+          mentionsSuperseded && superseded.contains(current)
+              ? message.replaceAll(superseded, '')
+              : message;
+      final mentionsCurrent =
+          current.isNotEmpty && currentMessage.contains(current);
+      if (mentionsSuperseded && !mentionsCurrent) {
         debugPrint('PlaybackSession 忽略旧媒体迟到错误: $message');
         return;
       }
       if (loading) {
-        if (message.contains(current) || !hasSuperseded) {
+        if (mentionsCurrent || !hasSuperseded) {
           _pendingLoadError = message;
           return;
         }
