@@ -749,6 +749,33 @@ void main() {
     expect(session.error, contains('HTTP 403'));
   });
 
+  test('同一条错误同时包含旧集完整地址与新集短地址时按当前集失败', () async {
+    await session.close();
+    platform = FakePlatform();
+    const previous = 'https://example.test/live.m3u8?episode=1';
+    const current = 'https://example.test/live.m3u8';
+    session = PlaybackSession(
+      player: Player(platformPlayer: platform),
+      initialUrl: previous,
+      initialTitle: 'Show',
+      episodes: const [
+        {'title': 'One', 'url': previous},
+        {'title': 'Two', 'url': current},
+      ],
+    );
+    await session.open();
+    await session.switchEpisode(1);
+
+    // 错误文本同时提到旧集（带查询参数）和当前集时，不能被旧地址
+    // 归属吞掉；应保留为当前集的可重试失败。
+    platform.emitError(
+      'Failed to open $current: HTTP 403 (redirected from $previous)',
+    );
+    await pumpEventQueue();
+    expect(session.ready, false);
+    expect(session.error, contains('HTTP 403'));
+  });
+
   test(
     'close while opening suppresses callbacks and disposes after open',
     () async {
