@@ -13,15 +13,21 @@ Windows 上的动漫聚合播放器，用 Flutter 和 media_kit 编写。可以�
 
 </details>
 
-[项目状态](#项目状态2026-11-17) · [运行方法](#从源码运行) · [在线验收与开发计划](docs/reviews/2026-11-06-online-acceptance-next-phase.md) · [反馈问题](https://github.com/QIAN-SHU-QAQ/NovaPlay/issues)
+[项目状态](#项目状态2026-11-18) · [预览版安装](#windows-预览版安装) · [从源码运行](#从源码运行) · [在线验收与开发计划](docs/reviews/2026-11-06-online-acceptance-next-phase.md) · [反馈问题](https://github.com/QIAN-SHU-QAQ/NovaPlay/issues)
 
-## 项目状态（2026-11-17）
+## 项目状态（2026-11-18）
 
 Windows 实机确认在线发现、搜索、详情、收藏、选集、播放和拖动可用。公开 TS HLS 样片通过下载器层的取消、续传、文件哈希比对和本地解码。R1 历史有序补交与 R6 配置桥已随 [PR #7](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/7) 合入，两个播放器跨两轮主窗口重启均能恢复同步。验收基线是 `689f8dd`。[基线 CI](https://github.com/QIAN-SHU-QAQ/NovaPlay/actions/runs/42163036020)
 
 **在线续播修复已合入。** Windows 实测从首页、历史和收藏续播第 2 集，三个入口均刷新了播放地址，并从约 180 秒继续。失败时的进度保留和重试已有回归覆盖。[PR #14 验收](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/14#pullrequestreview-5934123910)
 
-Windows 便携包已在开发机验证中文空格路径启动、应用重启后继续下载、片源停用后播放本地文件，以及保留旧版配置和下载路径。首个预览版仍待干净 Windows 环境验收。真实 Bangumi 请求在测试网络超时，弹幕实测需要专用凭据。
+`v1.0.0-preview.1` 已在干净的 Windows 11 x64 沙盒通过启动、三个入口续播、下载暂停后重启续传、离线播放和旧版数据迁移。受控 HLS 下载的成品 SHA-256 与原始分片按顺序拼接后的值一致，停用片源后仍可从下载页播放。预览版目前是发布草稿。Windows 10 暂无独立实测记录，真实外部片源、Bangumi 跨季匹配和弹弹play 仍待独立验证。
+
+## Windows 预览版安装
+
+1. 如果电脑尚未安装 Microsoft Visual C++ v14 x64 运行库，请先安装微软官方组件。[下载 VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe)
+2. 预览版发布后，从 [GitHub Releases](https://github.com/QIAN-SHU-QAQ/NovaPlay/releases) 下载 ZIP 和同名 `.sha256` 文件，校验后解压。
+3. 运行解压目录中的 `nova_play.exe`，保留同目录的 DLL 和 `data/`。路径可以包含中文和空格。[完整使用说明](docs/preview-usage.md)
 
 ## 现在能做什么
 
@@ -182,7 +188,7 @@ flutter build windows --release
 powershell -ExecutionPolicy Bypass -File scripts\package-portable.ps1
 ```
 
-产物在 `dist/`：`NovaPlay-<版本>-windows-x64.zip` 与同名 `.sha256`。CI 工作流 [windows-build](.github/workflows/windows-build.yml) 会在干净的 Windows runner 上执行锁定依赖解析、格式、分析、测试、Release 构建和打包；手动触发时可选择创建 draft Release，由维护者核对资产后再公开。干净机器验收（无 Flutter/VS、含中文和空格路径）仍需人工执行并记录。
+产物保存在 `dist/`，包括 `NovaPlay-<版本>-windows-x64.zip` 和同名 `.sha256` 文件。CI 工作流 [windows-build](.github/workflows/windows-build.yml) 会在干净的 Windows runner 上执行锁定依赖解析、格式检查、分析、测试、Release 构建和打包。手动触发时可选择创建发布草稿。每次更换候选包后，在干净 Windows 环境复验启动、播放、下载和升级，并记录结果。
 
 
 ## 参考
@@ -201,7 +207,7 @@ powershell -ExecutionPolicy Bypass -File scripts\package-portable.ps1
 下一批按以下顺序交付，详细文件范围、复现步骤和通过条件见 [在线验收与下一阶段开发计划](docs/reviews/2026-11-06-online-acceptance-next-phase.md)。
 
 1. **P0 在线续播已合入。** 三入口原集续播已通过 Windows 验收。
-2. **P1 验收 Windows 便携预览版。** 在干净 Windows 环境验证启动、下载续传、离线播放与旧数据升级。Bangumi 和弹幕保留独立的真实服务验收。
+2. **P1 完成 Windows 便携预览版发布验收。** 干净 Windows 11 沙盒已通过核心流程，接下来补真实片源、Bangumi 跨季匹配和弹弹play 实测，再确认预览版发布。
 3. **P2 做本地追番管理。** 预览版验收后先交付想看、在看、看完和筛选，覆盖多季隔离和重启保留。
 
 分页、播放设置、下载与弹幕的基础实现已随 [PR #3](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/3) 合入。[开发报告](开发报告.md)和早期开发计划中的待办需要按当前实现重新核对，不能再将这些功能全部视为尚未实现。
