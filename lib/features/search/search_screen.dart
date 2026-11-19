@@ -355,6 +355,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
         );
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(flex: 46, child: list),
             if (showPreview) ...[

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nova_play/features/search/search_screen.dart';
+import 'package:nova_play/features/search/widgets/search_result_preview.dart';
 import 'package:nova_play/models/video_model.dart';
 import 'package:nova_play/providers/scraper_provider.dart';
 import 'package:nova_play/providers/search_provider.dart';
@@ -129,6 +130,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('第二季的完整作品资料'), findsOneWidget);
     expect(find.text('片源：同名备用源'), findsOneWidget);
+    final preview = tester.getRect(find.byType(SearchResultPreview));
+    final divider = tester.getRect(find.byType(VerticalDivider));
+    expect(preview.top, divider.top);
+    expect(preview.bottom, divider.bottom);
 
     fixture.delayed.complete(_seasonOne.copyWith(description: '迟到的第一季资料'));
     await tester.pumpAndSettle();
