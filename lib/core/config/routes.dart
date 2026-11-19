@@ -8,6 +8,7 @@ import '../../features/download/download_screen.dart';
 import '../../features/favorites/favorites_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/schedule/schedule_screen.dart';
 import '../../models/video_model.dart';
 import '../../shared/widgets/main_scaffold.dart';
 
@@ -64,10 +65,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // 全屏搜索页：移出 shell，push 覆盖整个窗口
       GoRoute(
+        path: '/schedule',
+        builder: (context, state) => const ScheduleScreen(),
+      ),
+      GoRoute(
         path: '/search',
         builder:
-            (context, state) =>
-                SearchScreen(initialKeyword: state.uri.queryParameters['q']),
+            (context, state) => SearchScreen(
+              initialKeyword: state.uri.queryParameters['q'],
+              recoverySearch: state.uri.queryParameters['from'] != 'schedule',
+            ),
       ),
       GoRoute(
         path: '/detail/:id',

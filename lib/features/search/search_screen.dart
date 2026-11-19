@@ -8,6 +8,7 @@ import '../../providers/scraper_provider.dart';
 import '../../providers/search_provider.dart';
 import '../../services/database_service.dart';
 import '../../services/scraper/base_scraper.dart';
+import '../../shared/widgets/desktop_page_header.dart';
 import '../../shared/widgets/poster_card.dart';
 import '../../shared/widgets/source_picker.dart';
 import 'widgets/search_result_preview.dart';
@@ -15,9 +16,14 @@ import 'widgets/search_result_preview.dart';
 /// 全屏搜索页（覆盖整个窗口，不走 Rail shell）：
 /// 搜索框 + 筛选 chips + 结果计数 + 海报/列表视图切换。
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({super.key, this.initialKeyword});
+  const SearchScreen({
+    super.key,
+    this.initialKeyword,
+    this.recoverySearch = true,
+  });
 
   final String? initialKeyword;
+  final bool recoverySearch;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -35,7 +41,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   String _submittedKeyword = '';
   int _queryRevision = 0;
 
-  bool get _isSourceRecovery => widget.initialKeyword != null;
+  bool get _isSourceRecovery =>
+      widget.initialKeyword != null && widget.recoverySearch;
   String? get _selectedId => _selection?.id;
 
   ProviderListenable<SearchState> get _search =>
@@ -165,36 +172,27 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部：返回 + 搜索框 + 搜索按钮
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
-              child: Row(
+            DesktopPageHeader(
+              title: '搜索',
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: '返回',
+                onPressed:
+                    () => context.canPop() ? context.pop() : context.go('/'),
+              ),
+              toolbar: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    onPressed:
-                        () =>
-                            context.canPop() ? context.pop() : context.go('/'),
-                  ),
                   Expanded(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 640),
-                        child: TextField(
-                          controller: _searchController,
-                          autofocus: widget.initialKeyword == null,
-                          focusNode: _searchFocus,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: _performSearch,
-                          decoration: const InputDecoration(
-                            hintText: '搜索动漫...',
-                            prefixIcon: Icon(Icons.search),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: widget.initialKeyword == null,
+                      focusNode: _searchFocus,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: _performSearch,
+                      decoration: const InputDecoration(
+                        hintText: '输入片名',
+                        prefixIcon: Icon(Icons.search),
+                        isDense: true,
                       ),
                     ),
                   ),
@@ -203,7 +201,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     child: const Text('搜索'),
                   ),
                   const SourcePicker(),
-                  const SizedBox(width: 8),
                 ],
               ),
             ),

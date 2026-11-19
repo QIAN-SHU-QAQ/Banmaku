@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/desktop_page_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/scraper_provider.dart';
@@ -163,9 +164,10 @@ class _SourceManagementScreenState
     final active = ref.watch(activeSourceConfigProvider);
     final colors = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('数据源管理')),
-      body: Align(
+    return DesktopPage(
+      title: '数据源管理',
+      leading: const BackButton(),
+      child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),

@@ -9,17 +9,17 @@ import 'package:nova_play/models/video_model.dart';
 import 'package:nova_play/shared/widgets/poster_card.dart';
 
 void main() {
-  test('dark discovery colors use ink surfaces and warm amber progress', () {
+  test('dark discovery colors use mulberry surfaces and iris progress', () {
     final dark = AppTheme.dark;
 
-    expect(dark.colorScheme.surface, const Color(0xFF10151F));
-    expect(dark.colorScheme.surfaceContainerLowest, const Color(0xFF0B1019));
-    expect(dark.progressIndicatorTheme.color, const Color(0xFFEDB769));
+    expect(dark.colorScheme.surface, const Color(0xFF191621));
+    expect(dark.colorScheme.surfaceContainerLowest, const Color(0xFF12101A));
+    expect(dark.progressIndicatorTheme.color, const Color(0xFFC8BCFF));
     expect(
       dark.textTheme.bodyMedium?.fontFamilyFallback,
       contains('Microsoft YaHei UI'),
     );
-    expect(AppTheme.light.colorScheme.surface, const Color(0xFFFAFAF8));
+    expect(AppTheme.light.colorScheme.surface, const Color(0xFFFBF8F4));
   });
 
   testWidgets(

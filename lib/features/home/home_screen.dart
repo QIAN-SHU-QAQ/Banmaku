@@ -1,7 +1,8 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/utils/play_launcher.dart';
 import '../../models/history_item.dart';
@@ -11,10 +12,13 @@ import '../../providers/history_provider.dart';
 import '../../providers/scraper_provider.dart';
 import '../../providers/video_provider.dart';
 import '../../services/database_service.dart';
+import '../../shared/widgets/desktop_page_header.dart';
 import '../../shared/widgets/poster_card.dart';
 import '../../shared/widgets/source_picker.dart';
-import 'widgets/video_card.dart';
 import 'widgets/category_tabs.dart';
+import 'widgets/continue_watching_card.dart';
+import 'widgets/discovery_hero.dart';
+import 'widgets/video_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -78,121 +82,130 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final categories = ref.watch(categoriesProvider);
     final videoState = ref.watch(videoListProvider);
     final history = ref.watch(historyProvider);
-    return Scaffold(
-      body: RefreshIndicator(
+    final colors = Theme.of(context).colorScheme;
+    return DesktopPage(
+      title: '发现',
+      actions: [
+        OutlinedButton.icon(
+          onPressed: () => context.push('/search'),
+          icon: const Icon(Icons.search_rounded, size: 18),
+          label: const Text('搜索作品'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: () => context.push('/schedule'),
+          icon: const Icon(Icons.calendar_today_outlined, size: 17),
+          label: const Text('新番时间表'),
+          style: FilledButton.styleFrom(
+            backgroundColor: colors.primaryContainer,
+            foregroundColor: colors.onPrimaryContainer,
+          ),
+        ),
+        const SourcePicker(),
+        IconButton(
+          tooltip: '刷新',
+          onPressed: _refresh,
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+        ),
+      ],
+      child: RefreshIndicator(
         onRefresh: _refresh,
-        child: CustomScrollView(
-          controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(child: _header(context)),
-            if (history.isNotEmpty)
-              SliverToBoxAdapter(child: _continueWatching(context, history)),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
-                child: categories.maybeWhen(
-                  data:
-                      (categories) => CategoryTabs(
-                        categories:
-                            categories.isEmpty ? const ['全部'] : categories,
-                        selectedCategory: selectedCategory,
-                        onCategorySelected: (category) {
-                          ref.read(selectedCategoryProvider.notifier).state =
-                              category;
-                          if (_scrollController.hasClients) {
-                            _scrollController.jumpTo(0);
-                          }
-                        },
-                      ),
-                  orElse: () => const SizedBox(height: 44),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 720;
+            final inset = compact ? 16.0 : 24.0;
+            final all = selectedCategory == '全部';
+            return CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child:
+                      all && videoState.videos.isNotEmpty
+                          ? DiscoveryHero(
+                            videos: videoState.videos,
+                            padding: EdgeInsets.fromLTRB(inset, 14, inset, 4),
+                          )
+                          : const SizedBox.shrink(),
                 ),
-              ),
-            ),
-            if (selectedCategory == '全部')
-              _feed(videoState)
-            else
-              _category(selectedCategory),
-            const SliverToBoxAdapter(child: SizedBox(height: 28)),
-          ],
+                if (history.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: _continueWatching(
+                      context,
+                      history,
+                      inset: inset,
+                      cardWidth: compact ? 282 : 320,
+                    ),
+                  ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(inset, 17, inset, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionTitle(context, '片库'),
+                        const SizedBox(height: 8),
+                        categories.maybeWhen(
+                          data:
+                              (categories) => CategoryTabs(
+                                categories:
+                                    categories.isEmpty
+                                        ? const ['全部']
+                                        : categories,
+                                selectedCategory: selectedCategory,
+                                onCategorySelected: (category) {
+                                  ref
+                                      .read(selectedCategoryProvider.notifier)
+                                      .state = category;
+                                  if (_scrollController.hasClients) {
+                                    _scrollController.jumpTo(0);
+                                  }
+                                },
+                              ),
+                          orElse: () => const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (all)
+                  _feed(videoState, inset)
+                else
+                  _category(selectedCategory, inset),
+                const SliverToBoxAdapter(child: SizedBox(height: 28)),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _header(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 26, 28, 16),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final heading = Text(
-            '发现',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
-          );
-          final actions = Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: (constraints.maxWidth * 0.27).clamp(128.0, 234.0),
-                child: OutlinedButton.icon(
-                  onPressed: () => context.push('/search'),
-                  icon: const Icon(Icons.search, size: 18),
-                  label: const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('搜索作品'),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colors.onSurface,
-                    side: BorderSide(color: colors.outlineVariant),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
-              ),
-              const SourcePicker(),
-              IconButton(
-                tooltip: '刷新',
-                onPressed: _refresh,
-                icon: const Icon(Icons.refresh, size: 20),
-              ),
-            ],
-          );
-          return constraints.maxWidth < 540
-              ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [heading, const SizedBox(height: 12), actions],
-              )
-              : Row(children: [Expanded(child: heading), actions]);
-        },
-      ),
-    );
-  }
+  Widget _sectionTitle(BuildContext context, String title) => Semantics(
+    header: true,
+    child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+  );
 
-  Widget _continueWatching(BuildContext context, List<HistoryItem> history) {
-    final lineHeight = MediaQuery.textScalerOf(context).scale(18);
+  Widget _continueWatching(
+    BuildContext context,
+    List<HistoryItem> history, {
+    required double inset,
+    required double cardWidth,
+  }) {
+    final extraLineHeight = (MediaQuery.textScalerOf(context).scale(18) - 18)
+        .clamp(0.0, double.infinity);
+    final scrollBehavior = ScrollConfiguration.of(context);
     final sources = ref.watch(sourceConfigsProvider);
     final database = DatabaseService();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(top: 9, bottom: 9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(28, 4, 28, 12),
+            padding: EdgeInsets.fromLTRB(inset, 0, inset, 5),
             child: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    '继续观看',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
+                Expanded(child: _sectionTitle(context, '继续观看')),
                 TextButton(
                   onPressed: () => context.go('/history'),
                   child: const Text('观看记录'),
@@ -201,26 +214,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           SizedBox(
-            height: 94 + (lineHeight - 18).clamp(0.0, double.infinity) * 3,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              itemCount: history.take(12).length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final item = history[index];
-                final sourceId = database.sourceIdForHistory(item);
-                final configuredName =
-                    sources
-                        .where((source) => source.id == sourceId)
-                        .firstOrNull
-                        ?.name;
-                return _ContinueCard(
-                  item: item,
-                  sourceName: configuredName ?? item.sourceId,
-                  onTap: () => resumeFromOriginalSource(context, ref, item),
-                );
-              },
+            height: 115 + extraLineHeight * 4,
+            child: ScrollConfiguration(
+              behavior: scrollBehavior.copyWith(
+                dragDevices: {
+                  ...scrollBehavior.dragDevices,
+                  PointerDeviceKind.mouse,
+                },
+              ),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.symmetric(horizontal: inset),
+                itemCount: history.take(12).length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final item = history[index];
+                  final sourceId = database.sourceIdForHistory(item);
+                  final configuredName =
+                      sources
+                          .where((source) => source.id == sourceId)
+                          .firstOrNull
+                          ?.name;
+                  return SizedBox(
+                    width: cardWidth,
+                    child: ContinueWatchingCard(
+                      item: item,
+                      sourceName: configuredName ?? item.sourceId,
+                      onTap: () => resumeFromOriginalSource(context, ref, item),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -228,7 +252,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _feed(VideoListState state) {
+  Widget _feed(VideoListState state, double inset) {
     if (state.isLoading && state.videos.isEmpty) {
       return const SliverFillRemaining(
         hasScrollBody: false,
@@ -236,12 +260,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
     if (state.error != null && state.videos.isEmpty) {
-      return _message('加载失败', detail: state.error, onRetry: _refresh);
+      return _message('加载失败', canSwitchSource: true, onRetry: _refresh);
     }
     if (state.videos.isEmpty) return _message('暂无内容', onRetry: _refresh);
     return SliverMainAxisGroup(
       slivers: [
-        _grid(state.videos),
+        _grid(state.videos, inset),
         if (state.isLoading)
           const SliverToBoxAdapter(
             child: Padding(
@@ -263,7 +287,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _category(String category) {
+  Widget _category(String category, double inset) {
     final state = ref.watch(categoryFeedProvider(category));
     final notifier = ref.read(categoryFeedProvider(category).notifier);
     if (state.isLoading && state.videos.isEmpty) {
@@ -275,7 +299,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (state.error != null && state.videos.isEmpty) {
       return _message(
         '分类加载失败',
-        detail: state.error,
+        canSwitchSource: true,
         onRetry: notifier.loadMore,
       );
     }
@@ -284,7 +308,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     return SliverMainAxisGroup(
       slivers: [
-        _grid(state.videos),
+        _grid(state.videos, inset),
         if (state.isLoading)
           const SliverToBoxAdapter(
             child: Padding(
@@ -305,17 +329,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _grid(List<VideoModel> videos) {
+  Widget _grid(List<VideoModel> videos, double inset) {
     final active = ref.watch(activeSourceConfigProvider);
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: EdgeInsets.symmetric(horizontal: inset),
       sliver: SliverLayoutBuilder(
         builder:
             (context, constraints) => SliverGrid(
               gridDelegate: posterGridDelegate(
                 context,
                 constraints.crossAxisExtent,
-                maxTileWidth: 180,
+                maxTileWidth: 185,
                 spacing: 16,
               ),
               delegate: SliverChildBuilderDelegate((context, index) {
@@ -333,8 +357,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _message(String title, {String? detail, VoidCallback? onRetry}) {
-    final colors = Theme.of(context).colorScheme;
+  Widget _message(
+    String title, {
+    bool canSwitchSource = false,
+    required VoidCallback onRetry,
+  }) {
     return SliverFillRemaining(
       hasScrollBody: false,
       child: Center(
@@ -344,185 +371,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(title, style: Theme.of(context).textTheme.titleMedium),
-              if (detail != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  detail,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              ],
-              if (onRetry != null) ...[
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    OutlinedButton(onPressed: onRetry, child: const Text('重试')),
-                    if (detail != null) const SourcePicker(label: '切换片源'),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ContinueCard extends StatelessWidget {
-  final HistoryItem item;
-  final String? sourceName;
-  final VoidCallback onTap;
-
-  const _ContinueCard({
-    required this.item,
-    required this.sourceName,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final cover = item.cover;
-    final episode = item.episodeTitle?.trim();
-    final source = sourceName?.trim();
-    final hasEpisode = episode != null && episode.isNotEmpty;
-    final hasSource = source != null && source.isNotEmpty;
-    final metadataStyle = theme.textTheme.bodySmall?.copyWith(
-      color: colors.onSurfaceVariant,
-    );
-    return SizedBox(
-      width: 304,
-      child: Material(
-        color: colors.surfaceContainer,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: BorderSide(color: colors.outlineVariant),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          focusColor: colors.primary.withValues(alpha: 0.16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: 76,
-                child:
-                    cover != null && cover.isNotEmpty
-                        ? CachedNetworkImage(
-                          imageUrl:
-                              cover.startsWith('http')
-                                  ? cover
-                                  : 'https://yhdm.me$cover',
-                          fit: BoxFit.cover,
-                          placeholder:
-                              (_, __) => ColoredBox(
-                                color: colors.surfaceContainerHigh,
-                              ),
-                          errorWidget:
-                              (_, __, ___) => Icon(
-                                Icons.movie_outlined,
-                                color: colors.onSurfaceVariant,
-                              ),
-                        )
-                        : ColoredBox(
-                          color: colors.surfaceContainerHigh,
-                          child: Icon(
-                            Icons.movie_outlined,
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall,
-                      ),
-                      if (hasEpisode || hasSource) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            if (hasEpisode)
-                              Flexible(
-                                child: Text(
-                                  episode,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: metadataStyle?.copyWith(
-                                    color: colors.onSurface,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            if (hasEpisode && hasSource)
-                              Text(' · ', style: metadataStyle),
-                            if (hasSource)
-                              Flexible(
-                                child: Tooltip(
-                                  message: source,
-                                  excludeFromSemantics: true,
-                                  child: Text(
-                                    source,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: metadataStyle,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Text(
-                            '已看 ${_formatDuration(item.position)}',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
-                          ),
-                          if (item.progress > 0) ...[
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: LinearProgressIndicator(
-                                value: item.progress,
-                                minHeight: 3,
-                                backgroundColor: colors.outlineVariant,
-                                color: colors.primary,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton(onPressed: onRetry, child: const Text('重试')),
+                  if (canSwitchSource) const SourcePicker(label: '切换片源'),
+                ],
               ),
             ],
           ),
         ),
       ),
     );
-  }
-
-  String _formatDuration(Duration duration) {
-    final m = duration.inMinutes;
-    final s = duration.inSeconds % 60;
-    if (m >= 60) {
-      return '${m ~/ 60}:${(m % 60).toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    }
-    return '$m:${s.toString().padLeft(2, '0')}';
   }
 }

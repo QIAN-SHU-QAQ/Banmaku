@@ -54,7 +54,7 @@ void main() {
       ),
     );
     await tester.enterText(find.byType(TextField), '测试');
-    await tester.tap(find.text('搜索'));
+    await tester.tap(find.widgetWithText(TextButton, '搜索'));
     await tester.pumpAndSettle();
     expect(find.text('剧情片'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilterChip, '科幻'));

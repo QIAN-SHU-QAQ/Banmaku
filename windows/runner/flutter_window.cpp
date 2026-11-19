@@ -4,8 +4,9 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project)
-    : project_(project) {}
+FlutterWindow::FlutterWindow(const flutter::DartProject& project,
+                             bool show_on_first_frame)
+    : project_(project), show_on_first_frame_(show_on_first_frame) {}
 
 FlutterWindow::~FlutterWindow() {}
 
@@ -27,13 +28,15 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
+  // The main Dart app shows its window after configuring the integrated frame.
+  // The independent player keeps the native first-frame startup path.
+  if (show_on_first_frame_) {
+    flutter_controller_->engine()->SetNextFrameCallback([this]() {
+      Show();
+    });
+  }
 
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
+  // Ensure a frame is pending even if Flutter rendered before setup finished.
   flutter_controller_->ForceRedraw();
 
   return true;

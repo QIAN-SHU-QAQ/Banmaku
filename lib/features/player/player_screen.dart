@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:flutter/material.dart';
+import '../../core/window/main_window_chrome.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -642,54 +643,56 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             onPressed: _exitScreen,
           ),
           Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  flex: 3,
-                  child: Text(
-                    _session.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (source != null && source.isNotEmpty)
+            child: DesktopDragRegion(
+              child: Row(
+                children: [
                   Flexible(
-                    flex: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: Tooltip(
-                        message: source,
-                        excludeFromSemantics: true,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: colors.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
+                    flex: 3,
+                    child: Text(
+                      _session.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (source != null && source.isNotEmpty)
+                    Flexible(
+                      flex: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Tooltip(
+                          message: source,
+                          excludeFromSemantics: true,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colors.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text(
-                              source,
-                              style: TextStyle(
-                                color: colors.onSurface,
-                                fontSize: 12,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              child: Text(
+                                source,
+                                style: TextStyle(
+                                  color: colors.onSurface,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
           if (_isFullscreen)
@@ -698,6 +701,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
               onPressed: _toggleFullscreen,
             ),
+          if (!overlay) const DesktopWindowControls(),
         ],
       ),
     );

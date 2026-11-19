@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-/// 收藏和历史共用的媒体列表行。
-/// 收藏页、观看历史页、首页"继续观看"区共用。
+/// 收藏和观看历史共用的媒体卡片。
 class WideMediaCard extends StatelessWidget {
   final String title;
   final String? coverUrl;
@@ -38,25 +37,25 @@ class WideMediaCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
-      ),
+    return Material(
+      color: colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
               // 保留海报比例，观看进度显示在信息列。
               Container(
-                width: 56,
-                height: 84,
+                width: 64,
+                height: 96,
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -166,7 +165,7 @@ class WideMediaCard extends StatelessWidget {
 
               // 操作区
               if (onResume != null)
-                IconButton(
+                IconButton.filledTonal(
                   tooltip: '继续观看',
                   icon: const Icon(Icons.play_arrow_rounded),
                   onPressed: onResume,

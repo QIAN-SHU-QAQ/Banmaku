@@ -14,6 +14,7 @@ import '../../providers/scraper_provider.dart';
 import '../../providers/video_provider.dart';
 import '../../services/bangumi_api.dart';
 import '../../services/database_service.dart';
+import '../../shared/widgets/desktop_page_header.dart';
 import '../../shared/widgets/source_picker.dart';
 import 'widgets/bangumi_match_dialog.dart';
 import 'widgets/subject_summary.dart';
@@ -48,14 +49,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             : savedVideoDetailProvider(saved);
     final videoDetail = ref.watch(provider);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/'),
-        ),
+    return DesktopPage(
+      title: '作品详情',
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded),
+        tooltip: '返回',
+        onPressed: () => context.canPop() ? context.pop() : context.go('/'),
       ),
-      body: videoDetail.when(
+      child: videoDetail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error:
             (error, stack) => Center(

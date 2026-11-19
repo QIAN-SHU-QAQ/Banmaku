@@ -73,7 +73,7 @@ class PosterCard extends StatefulWidget {
 }
 
 class _PosterCardState extends State<PosterCard> {
-  static final _radius = BorderRadius.circular(8);
+  static final _radius = BorderRadius.circular(15);
   bool _hovered = false;
   bool _focused = false;
   bool _playFocused = false;
@@ -81,7 +81,6 @@ class _PosterCardState extends State<PosterCard> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final scaler = MediaQuery.textScalerOf(context);
     final video = widget.video;
     final metadata = [
           if (widget.showSource) video.source,
@@ -181,46 +180,44 @@ class _PosterCardState extends State<PosterCard> {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    2,
-                    PosterCard._titleTop,
-                    2,
-                    0,
-                  ),
-                  child: SizedBox(
-                    height: PosterCard._titleHeight(scaler),
-                    child: Text(
-                      video.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: PosterCard._titleSize,
-                        height: PosterCard._lineHeight,
-                        fontWeight: FontWeight.w600,
-                        color: colors.onSurface,
-                      ),
+                SizedBox(
+                  height: PosterCard.captionHeight(context),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      5,
+                      PosterCard._titleTop,
+                      5,
+                      0,
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    2,
-                    PosterCard._metadataTop,
-                    2,
-                    PosterCard._captionBottom,
-                  ),
-                  child: SizedBox(
-                    height: PosterCard._metadataHeight(scaler),
-                    child: Text(
-                      metadata.isEmpty ? (video.description ?? '') : metadata,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: PosterCard._metadataSize,
-                        height: PosterCard._lineHeight,
-                        color: colors.onSurfaceVariant,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          video.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: PosterCard._titleSize,
+                            height: PosterCard._lineHeight,
+                            fontWeight: FontWeight.w700,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        if (metadata.isNotEmpty ||
+                            video.description?.isNotEmpty == true) ...[
+                          const SizedBox(height: PosterCard._metadataTop),
+                          Text(
+                            metadata.isEmpty ? video.description! : metadata,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: PosterCard._metadataSize,
+                              height: PosterCard._lineHeight,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
