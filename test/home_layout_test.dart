@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nova_play/core/config/theme.dart';
 import 'package:nova_play/features/home/home_screen.dart';
 import 'package:nova_play/features/home/widgets/category_tabs.dart';
 import 'package:nova_play/models/video_model.dart';
@@ -104,6 +105,9 @@ Future<GoRouter> pumpHome(
   LibraryScraper scraper,
   Size size, {
   List<HistoryItem> history = const [],
+  ThemeData? theme,
+  OriginalSourceDetail? originalDetail,
+  ValueChanged<Map<String, dynamic>>? onPlayback,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -126,6 +130,7 @@ Future<GoRouter> pumpHome(
         path: '/player',
         builder: (_, state) {
           final extra = state.extra! as Map<String, dynamic>;
+          onPlayback?.call(extra);
           return Scaffold(
             body: Text('续播 ${extra['videoId']} ${extra['startAt']}'),
           );
@@ -139,15 +144,52 @@ Future<GoRouter> pumpHome(
       overrides: [
         currentScraperProvider.overrideWithValue(scraper),
         historyProvider.overrideWith((ref) => SeededHistory(history)),
+        if (originalDetail != null)
+          originalSourceDetailProvider.overrideWithValue(originalDetail),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(routerConfig: router, theme: theme),
     ),
   );
   await tester.pumpAndSettle();
   return router;
 }
 
+HistoryItem _sameEpisodeHistory(String videoId, String source, int seconds) =>
+    HistoryItem(
+      videoId: videoId,
+      title: '同名作品',
+      sourceId: source,
+      episodeIndex: 0,
+      position: Duration(seconds: seconds),
+      duration: const Duration(minutes: 24),
+      watchedAt: DateTime(2026),
+      episodes: [
+        EpisodeModel(id: 'ep', title: '第 1 集', url: 'https://fake.local/ep'),
+      ],
+    );
+
+Future<void> _tabTo(WidgetTester tester, Finder label) async {
+  for (var step = 0; step < 8; step++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    if (Focus.of(tester.element(label)).hasPrimaryFocus) return;
+  }
+  fail('Tab did not focus the card containing $label');
+}
+
 void main() {
+  testWidgets('已确认的续播片源显示配置中的当前名称', (tester) async {
+    final saved = _sameEpisodeHistory('360zy:28', '旧片源名', 242);
+    await pumpHome(
+      tester,
+      LibraryScraper(),
+      const Size(1120, 720),
+      history: [saved],
+    );
+    expect(find.text('360zy'), findsOneWidget);
+    expect(find.text('旧片源名'), findsNothing);
+  });
+
   testWidgets('Refreshing an available source also retries its category list', (
     tester,
   ) async {
@@ -268,11 +310,129 @@ void main() {
     const Size(1120, 720),
     const Size(1280, 800),
   ]) {
+    for (final theme in [AppTheme.light, AppTheme.dark]) {
+      testWidgets(
+        'Continuation distinguishes sources at $size in ${theme.brightness}',
+        (tester) async {
+          final history = [
+            _sameEpisodeHistory('28', 'LziApi', 125),
+            _sameEpisodeHistory('360zy:28', '360zy', 242),
+          ];
+          final playback = <Map<String, dynamic>>[];
+          final requests = <(String, String?)>[];
+          final router = await pumpHome(
+            tester,
+            LibraryScraper(),
+            size,
+            history: history,
+            theme: theme,
+            originalDetail: (id, sourceConfigId) async {
+              requests.add((id, sourceConfigId));
+              final item = history.singleWhere((item) => item.videoId == id);
+              return VideoModel(
+                id: id,
+                title: item.title,
+                source: item.sourceId,
+                episodes: [
+                  EpisodeModel(
+                    id: 'ep',
+                    title: '第 1 集',
+                    url: 'https://$sourceConfigId.test/refreshed.m3u8',
+                  ),
+                ],
+              );
+            },
+            onPlayback: playback.add,
+          );
+          for (final (index, timestamp, configId) in [
+            (0, '已看 2:05', 'lziapi'),
+            (1, '已看 4:02', '360zy'),
+          ]) {
+            final item = history[index];
+            final label = find.text(item.sourceId!);
+            expect(label, findsOneWidget);
+            final card = find.ancestor(
+              of: label,
+              matching: find.byType(InkWell),
+            );
+            final viewport = tester.getRect(
+              find.ancestor(of: card, matching: find.byType(ListView)),
+            );
+            expect(
+              find.descendant(of: card, matching: find.text(item.title)),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(of: card, matching: find.text('第 1 集')),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(of: card, matching: find.text(timestamp)),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                of: card,
+                matching: find.byIcon(Icons.movie_outlined),
+              ),
+              findsOneWidget,
+            );
+            final progress = tester.widget<LinearProgressIndicator>(
+              find.descendant(
+                of: card,
+                matching: find.byType(LinearProgressIndicator),
+              ),
+            );
+            expect(progress.value, item.progress);
+
+            if (index == 0) {
+              expect(
+                viewport.intersect(tester.getRect(card)),
+                tester.getRect(card),
+              );
+            }
+            await _tabTo(tester, label);
+            expect(
+              viewport.intersect(tester.getRect(card)),
+              tester.getRect(card),
+            );
+            await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+            await tester.pumpAndSettle();
+            expect(requests.last, (item.videoId, configId));
+            expect(
+              playback.last,
+              containsPair('videoUrl', 'https://$configId.test/refreshed.m3u8'),
+            );
+            expect(playback.last, containsPair('sourceId', item.sourceId));
+            expect(
+              playback.last,
+              containsPair('startAt', item.position.inSeconds),
+            );
+            expect(playback.last, containsPair('currentIndex', 0));
+            router.pop();
+            await tester.pumpAndSettle();
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
     testWidgets('One discovery grid fits $size and opens a title', (
       tester,
     ) async {
       await pumpHome(tester, LibraryScraper(), size);
       expect(find.text('发现'), findsOneWidget);
+      expect(find.text('继续观看'), findsNothing);
+      expect(
+        tester.getTopLeft(find.byType(CategoryTabs)).dy -
+            tester.getBottomLeft(find.byTooltip('刷新')).dy,
+        inInclusiveRange(0, 32),
+      );
+      expect(
+        tester.getTopLeft(find.byType(PosterCard).first).dy -
+            tester.getBottomLeft(find.byType(CategoryTabs)).dy,
+        inInclusiveRange(0, 24),
+      );
       expect(find.text('热门推荐'), findsNothing);
       expect(find.byType(PosterCard), findsWidgets);
       expect(find.text('作品 0'), findsOneWidget);

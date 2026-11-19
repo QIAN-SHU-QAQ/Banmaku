@@ -10,6 +10,7 @@ import '../../providers/home_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/scraper_provider.dart';
 import '../../providers/video_provider.dart';
+import '../../services/database_service.dart';
 import '../../shared/widgets/poster_card.dart';
 import '../../shared/widgets/source_picker.dart';
 import 'widgets/video_card.dart';
@@ -174,6 +175,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _continueWatching(BuildContext context, List<HistoryItem> history) {
+    final lineHeight = MediaQuery.textScalerOf(context).scale(18);
+    final sources = ref.watch(sourceConfigsProvider);
+    final database = DatabaseService();
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -197,22 +201,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           SizedBox(
-            height: 94,
+            height: 94 + (lineHeight - 18).clamp(0.0, double.infinity) * 3,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 28),
               itemCount: history.take(12).length,
               separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder:
-                  (context, index) => _ContinueCard(
-                    item: history[index],
-                    onTap:
-                        () => resumeFromOriginalSource(
-                          context,
-                          ref,
-                          history[index],
-                        ),
-                  ),
+              itemBuilder: (context, index) {
+                final item = history[index];
+                final sourceId = database.sourceIdForHistory(item);
+                final configuredName =
+                    sources
+                        .where((source) => source.id == sourceId)
+                        .firstOrNull
+                        ?.name;
+                return _ContinueCard(
+                  item: item,
+                  sourceName: configuredName ?? item.sourceId,
+                  onTap: () => resumeFromOriginalSource(context, ref, item),
+                );
+              },
             ),
           ),
         ],
@@ -365,16 +373,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 class _ContinueCard extends StatelessWidget {
   final HistoryItem item;
+  final String? sourceName;
   final VoidCallback onTap;
 
-  const _ContinueCard({required this.item, required this.onTap});
+  const _ContinueCard({
+    required this.item,
+    required this.sourceName,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final cover = item.cover;
-    final subtitle =
-        item.episodeTitle ?? '已看 ${_formatDuration(item.position)}';
+    final episode = item.episodeTitle?.trim();
+    final source = sourceName?.trim();
+    final hasEpisode = episode != null && episode.isNotEmpty;
+    final hasSource = source != null && source.isNotEmpty;
+    final metadataStyle = theme.textTheme.bodySmall?.copyWith(
+      color: colors.onSurfaceVariant,
+    );
     return SizedBox(
       width: 304,
       child: Material(
@@ -388,10 +407,10 @@ class _ContinueCard extends StatelessWidget {
           onTap: onTap,
           focusColor: colors.primary.withValues(alpha: 0.16),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
                 width: 76,
-                height: 94,
                 child:
                     cover != null && cover.isNotEmpty
                         ? CachedNetworkImage(
@@ -429,30 +448,64 @@ class _ContinueCard extends StatelessWidget {
                         item.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: theme.textTheme.titleSmall,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                      if (item.progress > 0) ...[
-                        const SizedBox(height: 10),
-                        LinearProgressIndicator(
-                          value: item.progress,
-                          minHeight: 2,
-                          backgroundColor: colors.outlineVariant,
-                          color: colors.primary,
+                      if (hasEpisode || hasSource) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            if (hasEpisode)
+                              Flexible(
+                                child: Text(
+                                  episode,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: metadataStyle?.copyWith(
+                                    color: colors.onSurface,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            if (hasEpisode && hasSource)
+                              Text(' · ', style: metadataStyle),
+                            if (hasSource)
+                              Flexible(
+                                child: Tooltip(
+                                  message: source,
+                                  excludeFromSemantics: true,
+                                  child: Text(
+                                    source,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: metadataStyle,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            '已看 ${_formatDuration(item.position)}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                          if (item.progress > 0) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: LinearProgressIndicator(
+                                value: item.progress,
+                                minHeight: 3,
+                                backgroundColor: colors.outlineVariant,
+                                color: colors.primary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 ),
