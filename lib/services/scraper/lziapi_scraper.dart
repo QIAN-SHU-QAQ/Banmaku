@@ -6,23 +6,31 @@ import '../../core/network/http_client.dart';
 import '../../models/video_model.dart';
 import 'base_scraper.dart';
 import 'source_config.dart';
+import 'source_identity.dart';
 
 /// maccms 风格 API 数据源。
 ///
 /// 默认使用内置的两个源（LziApi 主源、360zy 备用源），但源本身由
 /// [SourceConfig] 驱动：用户可以新增/启停/切换数据源（见设置页）。
-/// 主源失败时按顺序回退到其余启用的源；作品 ID 用 `<sourceId>:` 前缀做命名空间，
-/// 保证不同源的同号作品互不覆盖收藏/历史。
+/// 列表可选回退到其余启用的源。LziApi 保留旧数字 ID，其他源的作品 ID
+/// 使用固定的 `<sourceId>:` 前缀。
 class LziApiScraper extends BaseScraper {
-  LziApiScraper({SourceConfig? primary, List<SourceConfig>? fallbacks})
-    : primary = primary ?? SourceConfig.defaults().first,
-      _fallbacks = fallbacks ?? SourceConfig.defaults().skip(1).toList();
+  LziApiScraper({
+    SourceConfig? primary,
+    List<SourceConfig>? fallbacks,
+    this.allowDetailPlaybackSubstitution = true,
+    this.allowListFallback = true,
+  }) : primary = primary ?? SourceConfig.defaults().first,
+       _fallbacks = fallbacks ?? SourceConfig.defaults().skip(1).toList();
 
   /// 主源
   final SourceConfig primary;
 
-  /// 备用源（仅启用的会参与回退）
+  /// 其余数据源（仅启用的会参与详情和列表请求）
   final List<SourceConfig> _fallbacks;
+
+  final bool allowDetailPlaybackSubstitution;
+  final bool allowListFallback;
 
   final HttpClient _httpClient = HttpClient();
 
@@ -41,12 +49,15 @@ class LziApiScraper extends BaseScraper {
   @override
   String get icon => '🎬';
 
-  // maccms 分类 ID
-  static const int _typeGuochan = 29; // 国产动漫
-  static const int _typeRihan = 30; // 日韩动漫
-  static const int _typeOumei = 31; // 欧美动漫
-  static const int _typeGangtai = 32; // 港台动漫
-  static const int _typeHaiwai = 33; // 海外动漫
+  static const _defaultCategory = '日韩动漫';
+  static const _allCategories = '全部';
+  static const _lziCategories = {
+    _defaultCategory: '30',
+    '国产动漫': '29',
+    '欧美动漫': '31',
+    '港台动漫': '32',
+    '海外动漫': '33',
+  };
 
   /// 快速 CDN 域名列表（按速度排序）
   static const List<String> _fastCdnDomains = [
@@ -85,26 +96,36 @@ class LziApiScraper extends BaseScraper {
     return data;
   }
 
-  /// 每个备用源的分类名 → type_id 映射（按需拉取并缓存）
-  final Map<int, Map<String, String>> _categoryCache = {};
+  /// 同源的分类菜单与列表请求共用一次分类查询。
+  final _categoryCache = <int, Future<Map<String, String>>>{};
 
-  Future<String> _backupCategory(int source, String category) async {
-    var mapping = _categoryCache[source];
-    if (mapping == null) {
+  Future<Map<String, String>> _sourceCategories(int source) async {
+    if (_sources[source].id == lziApiSourceId) return _lziCategories;
+
+    final pending = _categoryCache.putIfAbsent(source, () async {
       final data = await _fetchData({'ac': 'list'}, source: source);
-      mapping = <String, String>{};
-      for (final entry in (data['class'] as List? ?? const [])) {
-        if (entry is Map) {
-          mapping[entry['type_name'].toString()] = entry['type_id'].toString();
-        }
+      return {
+        for (final entry in (data['class'] as List? ?? const []))
+          if (entry case {
+            'type_name': final String name,
+            'type_id': final id,
+          } when name.isNotEmpty && name != _allCategories && id != null)
+            name: id.toString(),
+      };
+    });
+    try {
+      return await pending;
+    } catch (_) {
+      if (identical(_categoryCache[source], pending)) {
+        _categoryCache.remove(source);
       }
-      _categoryCache[source] = mapping;
+      rethrow;
     }
-    final id = mapping[category];
-    if (id == null) {
-      throw StateError('数据源 ${_sources[source].name} 不支持该分类');
-    }
-    return id;
+  }
+
+  int get _listSourceCount {
+    if (!primary.enabled) return 0;
+    return allowListFallback ? _sources.length : 1;
   }
 
   /// 空列表是有效结果；只有请求或协议异常才回退到下一个源。
@@ -112,11 +133,19 @@ class LziApiScraper extends BaseScraper {
     Map<String, dynamic> params, {
     String? category,
   }) async {
-    for (var source = 0; source < _sources.length; source++) {
+    for (var source = 0; source < _listSourceCount; source++) {
       try {
         final query = Map<String, dynamic>.of(params);
-        if (source > 0 && category != null) {
-          query['t'] = await _backupCategory(source, category);
+        if (category == _allCategories &&
+            _sources[source].id == lziApiSourceId) {
+          query['t'] = _lziCategories[_defaultCategory];
+        } else if (category != null && category != _allCategories) {
+          final categories = await _sourceCategories(source);
+          final categoryId = categories[category];
+          if (categoryId == null) {
+            throw StateError('数据源 ${_sources[source].name} 不支持该分类');
+          }
+          query['t'] = categoryId;
         }
         final data = await _fetchData(query, source: source);
         return (data['list'] as List)
@@ -134,12 +163,16 @@ class LziApiScraper extends BaseScraper {
 
   @override
   Future<List<String>> getCategories() async {
-    return ['全部', '日韩动漫', '国产动漫', '欧美动漫', '港台动漫', '海外动漫'];
+    if (!primary.enabled) return [_allCategories];
+    final categories = await _sourceCategories(0);
+    return [_allCategories, ...categories.keys];
   }
 
   @override
   Future<List<VideoModel>> getHome({int page = 1}) async {
-    return getByCategory('日韩动漫', page: page);
+    final category =
+        primary.id == lziApiSourceId ? _defaultCategory : _allCategories;
+    return getByCategory(category, page: page);
   }
 
   @override
@@ -147,32 +180,7 @@ class LziApiScraper extends BaseScraper {
     String category, {
     int page = 1,
   }) async {
-    int typeId;
-    switch (category) {
-      case '日韩动漫':
-        typeId = _typeRihan;
-        break;
-      case '国产动漫':
-        typeId = _typeGuochan;
-        break;
-      case '欧美动漫':
-        typeId = _typeOumei;
-        break;
-      case '港台动漫':
-        typeId = _typeGangtai;
-        break;
-      case '海外动漫':
-        typeId = _typeHaiwai;
-        break;
-      default:
-        typeId = _typeRihan;
-    }
-
-    return _listWithFallback({
-      'ac': 'detail',
-      't': typeId,
-      'pg': page,
-    }, category: category == '全部' ? '日韩动漫' : category);
+    return _listWithFallback({'ac': 'detail', 'pg': page}, category: category);
   }
 
   @override
@@ -180,22 +188,40 @@ class LziApiScraper extends BaseScraper {
     return _listWithFallback({'ac': 'detail', 'wd': keyword, 'pg': page});
   }
 
-  /// 解析带命名空间的作品 ID：默认源为纯数字，其它源为 `<sourceId>:<vodId>`。
-  (int, String) _decodeId(String raw) {
-    for (var i = 1; i < _sources.length; i++) {
-      final prefix = '${_sources[i].id}:';
-      if (raw.startsWith(prefix)) {
-        return (i, raw.substring(prefix.length));
-      }
-    }
-    return (0, raw);
-  }
-
   @override
   Future<VideoModel> getDetail(String url) async {
-    final (sourceIndex, id) = _decodeId(url);
-    if (!RegExp(r'^\d+$').hasMatch(id)) {
+    final identity = decodeSourceVideoId(url);
+    if (identity == null) {
       throw Exception('无效的视频标识，请重新搜索作品');
+    }
+    return _getDetail(
+      identity.sourceConfigId,
+      identity.vodId,
+      allowPlaybackSubstitution: allowDetailPlaybackSubstitution,
+    );
+  }
+
+  /// 用已确认的原始来源查询旧记录保存的数字作品 ID。
+  Future<VideoModel> getDetailFromSource(
+    String sourceConfigId,
+    String vodId,
+  ) async {
+    if (!isNumericVodId(vodId)) {
+      throw Exception('无效的视频标识，请重新搜索作品');
+    }
+    return _getDetail(sourceConfigId, vodId, allowPlaybackSubstitution: false);
+  }
+
+  Future<VideoModel> _getDetail(
+    String sourceConfigId,
+    String id, {
+    required bool allowPlaybackSubstitution,
+  }) async {
+    final sourceIndex = _sources.indexWhere(
+      (source) => source.enabled && source.id == sourceConfigId,
+    );
+    if (sourceIndex < 0) {
+      throw Exception('作品的原始数据源已不可用，请重新搜索作品');
     }
     try {
       final data = await _fetchData({
@@ -224,7 +250,8 @@ class LziApiScraper extends BaseScraper {
 
       // 只有主源详情才尝试用其它源替换播放地址（备用源本身已是备选，
       // 再回主源会引入额外请求并改变作品来源语义）。
-      if (sourceIndex == 0 &&
+      if (allowPlaybackSubstitution &&
+          sourceIndex == 0 &&
           !hasFastCdn &&
           video.title.isNotEmpty &&
           _hasExplicitEpisodeTitles(item) &&
@@ -340,7 +367,7 @@ class LziApiScraper extends BaseScraper {
       throw const FormatException('数据源缺少作品标识或标题');
     }
     final vodId = item['vod_id'].toString();
-    if (!RegExp(r'^\d+$').hasMatch(vodId)) {
+    if (!isNumericVodId(vodId)) {
       throw const FormatException('数据源作品标识无效');
     }
     final config = _sources[source];
@@ -384,8 +411,7 @@ class LziApiScraper extends BaseScraper {
     final episodes = _parseEpisodes(item);
 
     return VideoModel(
-      // 默认源保持纯数字 ID（兼容已有收藏/历史），其它源加命名空间前缀。
-      id: source == 0 ? vodId : '${config.id}:$vodId',
+      id: encodeSourceVideoId(config.id, vodId),
       title: title,
       cover: pic,
       description: description.isNotEmpty ? description : null,
@@ -394,6 +420,7 @@ class LziApiScraper extends BaseScraper {
       genre: className ?? area,
       source: config.name,
       sourceUrl: config.baseUrl,
+      sourceConfigId: config.id,
       episodes: episodes,
     );
   }

@@ -181,6 +181,20 @@ void main() {
     expect(target, isNull);
   });
 
+  test('同源重新分配 ID 时，不续播片名相似的不同季', () async {
+    final target = await resolveHistoryResumeTarget(
+      _history(title: '测试动画', sourceId: '源A'),
+      fetchDetail:
+          () async => VideoModel(
+            id: 'v1',
+            title: '测试动画 第二季',
+            source: '源A',
+            episodes: [_episode('ep1', '第01集', 'new-ep1')],
+          ),
+    );
+    expect(target, isNull);
+  });
+
   test('R4：LziApi 位置生成的 ep_N 不能当身份（重排后按页面 URL 定位）', () async {
     // 快照来自上一次详情解析：id 是位置生成，url 是原始页面 URL。
     final item = HistoryItem(

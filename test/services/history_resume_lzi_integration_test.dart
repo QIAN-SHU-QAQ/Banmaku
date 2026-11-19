@@ -26,13 +26,29 @@ void main() {
   late HttpServer server;
   late String playlist;
   late LziApiScraper scraper;
+  late SourceConfig local;
+  late SourceConfig lziapi;
+  late List<Uri> requests;
 
   setUp(() async {
     playlist = '第1集\$https://site/ep1#第2集\$https://site/ep2';
+    requests = [];
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    local = SourceConfig(
+      id: 'local',
+      name: '本地测试源',
+      baseUrl: 'http://127.0.0.1:${server.port}/local',
+    );
+    lziapi = SourceConfig(
+      id: 'lziapi',
+      name: '本地 LziApi',
+      baseUrl: 'http://127.0.0.1:${server.port}/lziapi',
+    );
     server.listen((request) async {
       try {
         await request.drain<void>();
+        requests.add(request.uri);
+        final isLziApi = request.uri.path == '/lziapi';
         request.response.statusCode = HttpStatus.ok;
         request.response.headers.contentType = ContentType(
           'application',
@@ -45,13 +61,14 @@ void main() {
             'list': [
               {
                 'vod_id': 42,
-                'vod_name': 'QA Sample',
+                'vod_name': isLziApi ? 'LziApi Sample' : 'QA Sample',
                 'vod_pic': 'https://site/cover.jpg',
                 'vod_content': 'QA',
                 'vod_year': '2024',
                 'vod_score': '8.0',
                 'vod_class': '动画',
-                'vod_play_url': playlist,
+                'vod_play_url':
+                    isLziApi ? r'第1集$https://lzi/ep1.m3u8' : playlist,
               },
             ],
           }),
@@ -61,22 +78,52 @@ void main() {
         debugPrint('local test server error: $e');
       }
     });
-    scraper = LziApiScraper(
-      primary: SourceConfig(
-        id: 'local',
-        name: '本地测试源',
-        baseUrl: 'http://127.0.0.1:${server.port}/api.php/provide/vod/',
-      ),
-      fallbacks: const [],
-    );
+    scraper = LziApiScraper(primary: local, fallbacks: const []);
   });
 
   tearDown(() async {
     await server.close(force: true);
   });
 
+  test('切换主源后两源同号作品仍按固定 ID 查询', () async {
+    final lziPrimary = LziApiScraper(
+      primary: lziapi,
+      fallbacks: [local],
+      allowDetailPlaybackSubstitution: false,
+    );
+    final localPrimary = LziApiScraper(
+      primary: local,
+      fallbacks: [lziapi],
+      allowDetailPlaybackSubstitution: false,
+    );
+
+    final fromLziApi = (await lziPrimary.search('Sample')).single;
+    final fromLocal = (await localPrimary.search('Sample')).single;
+    expect(fromLziApi.id, '42');
+    expect(fromLocal.id, 'local:42');
+
+    final previousPrimary = await localPrimary.getDetail(fromLziApi.id);
+    final previousFallback = await lziPrimary.getDetail(fromLocal.id);
+    expect(previousPrimary.id, fromLziApi.id);
+    expect(previousPrimary.title, 'LziApi Sample');
+    expect(previousFallback.id, fromLocal.id);
+    expect(previousFallback.title, 'QA Sample');
+    expect((await localPrimary.getDetail(fromLocal.id)).id, fromLocal.id);
+    // 旧版也可能在 LziApi 充当备用源时存下命名空间。
+    expect((await localPrimary.getDetail('lziapi:42')).id, fromLziApi.id);
+    expect(
+      requests.skip(2).map((uri) => (uri.path, uri.queryParameters['ids'])),
+      [
+        ('/lziapi', '42'),
+        ('/local', '42'),
+        ('/local', '42'),
+        ('/lziapi', '42'),
+      ],
+    );
+  });
+
   test('R4：真实解析器的位置生成 ep_N 重排后按页面 URL 定位', () async {
-    final first = await scraper.getDetail('42');
+    final first = await scraper.getDetail('local:42');
     // 证明解析器确实是按位置生成 ID。
     expect(first.episodes!.map((e) => e.id), ['ep_1', 'ep_2']);
 
@@ -93,7 +140,7 @@ void main() {
     playlist = '第2集\$https://site/ep2#第1集\$https://site/ep1';
     final target = await resolveHistoryResumeTarget(
       history,
-      fetchDetail: () => scraper.getDetail('42'),
+      fetchDetail: () => scraper.getDetail(history.videoId),
     );
 
     expect(target, isNotNull);
@@ -102,7 +149,7 @@ void main() {
   });
 
   test('R4：真实解析器刷新后原集缺失时不按位置播别的集', () async {
-    final first = await scraper.getDetail('42');
+    final first = await scraper.getDetail('local:42');
     final history = HistoryItem(
       videoId: first.id,
       title: first.title,
@@ -115,7 +162,7 @@ void main() {
     playlist = '第1集\$https://site/ep1#第3集\$https://site/ep3';
     final target = await resolveHistoryResumeTarget(
       history,
-      fetchDetail: () => scraper.getDetail('42'),
+      fetchDetail: () => scraper.getDetail(history.videoId),
     );
     expect(target, isNull);
   });
@@ -142,7 +189,7 @@ void main() {
 
     // 真实 LziApi 的 vod_play_url 是直接媒体地址，甚至可能没有扩展名。
     playlist = '第1集\$https://cdn.test/hls/old1#第2集\$https://cdn.test/hls/old2';
-    final first = await scraper.getDetail('42');
+    final first = await scraper.getDetail('local:42');
     final firstMaps = episodeMaps(first);
     expect(firstMaps[1]['media'], 'true', reason: 'LziApi 地址必须标记为媒体地址');
     final identity = episodeIdentityFromMap(firstMaps[1], firstMaps);
@@ -166,7 +213,7 @@ void main() {
 
     // 源刷新：媒体地址轮换（old→new），列表位置/标题不变。
     playlist = '第1集\$https://cdn.test/hls/new1#第2集\$https://cdn.test/hls/new2';
-    final refreshed = await scraper.getDetail('42');
+    final refreshed = await scraper.getDetail(first.id);
     final newMaps = episodeMaps(refreshed);
     final newIdentity = episodeIdentityFromMap(newMaps[1], newMaps);
     expect(newIdentity, identity, reason: '地址轮换后关联键必须不变');
@@ -193,7 +240,7 @@ void main() {
     );
     final target = await resolveHistoryResumeTarget(
       history,
-      fetchDetail: () => scraper.getDetail('42'),
+      fetchDetail: () => scraper.getDetail(history.videoId),
     );
     expect(target, isNotNull);
     expect(target!.videoUrl, 'https://cdn.test/hls/new2');

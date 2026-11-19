@@ -11,6 +11,9 @@ import '../models/history_item.dart';
 import '../models/video_model.dart';
 import 'prefs_bridge.dart';
 import 'scraper/source_config.dart';
+import 'scraper/source_identity.dart';
+
+typedef _StoredWork = ({String id, String title, String? sourceId});
 
 /// 本地持久化 + 跨进程写入协调。
 ///
@@ -41,6 +44,7 @@ class DatabaseService {
   static const String _searchHistoryKey = 'search_history';
   static const String _sourcesKey = 'sources_v1';
   static const String _activeSourceKey = 'active_source_v1';
+  static const String _sourceAutoFallbackKey = 'source_auto_fallback_v1';
 
   /// 配置桥允许写入的标量键（其余键只允许主进程本地写）。
   static const Set<String> allowedScalarKeys = {
@@ -56,6 +60,7 @@ class DatabaseService {
     'danmaku_area',
     'sources_v1',
     'active_source_v1',
+    _sourceAutoFallbackKey,
     'search_history',
   };
 
@@ -317,6 +322,7 @@ class DatabaseService {
       'genre',
       'source',
       'sourceUrl',
+      'sourceConfigId',
     ]) {
       if (raw[key] != null && raw[key] is! String) return false;
     }
@@ -358,6 +364,7 @@ class DatabaseService {
         return value is int;
       case 'auto_play':
       case 'danmaku_enabled':
+      case _sourceAutoFallbackKey:
         return value is bool;
       case 'default_quality':
       case 'danmaku_app_id':
@@ -890,6 +897,15 @@ class DatabaseService {
     return getFavorites().any((v) => v.id == videoId);
   }
 
+  VideoModel? favoriteForVideo(VideoModel video) {
+    final favorites = getFavorites();
+    final id = _matchingStorageId(
+      _favoriteWork(video),
+      favorites.map(_favoriteWork),
+    );
+    return favorites.where((favorite) => favorite.id == id).firstOrNull;
+  }
+
   Future<void> addFavorite(VideoModel video) async {
     if (_bridge != null) {
       await _enqueueOp({'op': 'favorites.add', 'item': video.toJson()});
@@ -902,31 +918,33 @@ class DatabaseService {
     final prefs = _store;
     if (prefs == null) return;
     final opAt = at ?? DateTime.now();
+    final favorites = getFavorites();
+    final works = favorites.map(_favoriteWork);
+    final work = _favoriteWork(video);
+    final tombstones = _loadFavoriteTombstones();
+    final id = _storageIdForWrite(work, works, tombstones);
+    if (id == null) return;
 
     // 统一版本规则（add/remove 双向）：
     // - 该收藏最近一次已应用操作时间晚于本次操作时，本次是旧操作，忽略；
     // - remove tombstone 晚于/等于本次 add 时，旧 add 不能复活收藏。
     final versions = _loadFavoriteVersions();
-    final lastVersion = versions[video.id];
+    final lastVersion = versions[id];
     if (lastVersion != null && opAt.isBefore(lastVersion)) {
       return;
     }
-    final tombstones = _loadFavoriteTombstones();
-    final deletedAt = tombstones[video.id];
-    if (deletedAt != null && !opAt.isAfter(deletedAt)) {
-      return;
-    }
+    final deletionKeys = _deletionKeys(work, id, works, tombstones);
+    if (deletionKeys.any((key) => !opAt.isAfter(tombstones[key]!))) return;
 
-    final favorites = getFavorites()..removeWhere((v) => v.id == video.id);
-    favorites.insert(0, video);
+    favorites.removeWhere((v) => v.id == id);
+    favorites.insert(0, id == video.id ? video : video.copyWith(id: id));
     await prefs.setString(
       _favoritesKey,
       jsonEncode(favorites.map((v) => v.toJson()).toList()),
     );
-    versions[video.id] = opAt;
+    versions[id] = opAt;
     await _saveFavoriteVersions(versions);
-    if (deletedAt != null) {
-      tombstones.remove(video.id);
+    if (_forgetAppliedDeletions(tombstones, deletionKeys)) {
       await _saveFavoriteTombstones(tombstones);
     }
   }
@@ -951,7 +969,17 @@ class DatabaseService {
       return;
     }
 
-    final favorites = getFavorites()..removeWhere((v) => v.id == videoId);
+    final favorites = getFavorites();
+    final existing = favorites.where((v) => v.id == videoId).firstOrNull;
+    final tombstones = _loadFavoriteTombstones();
+    final deleted = _rememberDeletion(
+      tombstones,
+      videoId,
+      opAt,
+      work: existing == null ? null : _favoriteWork(existing),
+      otherWorks: favorites.where((v) => v.id != videoId).map(_favoriteWork),
+    );
+    favorites.removeWhere((v) => v.id == videoId);
     await prefs.setString(
       _favoritesKey,
       jsonEncode(favorites.map((v) => v.toJson()).toList()),
@@ -959,12 +987,7 @@ class DatabaseService {
     versions[videoId] = opAt;
     await _saveFavoriteVersions(versions);
 
-    final tombstones = _loadFavoriteTombstones();
-    final previous = tombstones[videoId];
-    if (previous == null || opAt.isAfter(previous)) {
-      tombstones[videoId] = opAt;
-      await _saveFavoriteTombstones(tombstones);
-    }
+    if (deleted) await _saveFavoriteTombstones(tombstones);
   }
 
   Map<String, DateTime> _loadFavoriteVersions() {
@@ -1063,11 +1086,27 @@ class DatabaseService {
     return items;
   }
 
-  HistoryItem? _findHistory(String videoId) {
-    for (final item in getHistory()) {
-      if (item.videoId == videoId) return item;
+  HistoryItem? historyForVideo(VideoModel video) {
+    final history = getHistory();
+    final id = _matchingStorageId(
+      _favoriteWork(video),
+      history.map(_historyWork),
+    );
+    return history.where((item) => item.videoId == id).firstOrNull;
+  }
+
+  /// 计算播放器写入历史所用的键，保留已确认的旧记录。
+  String historyIdForVideo(VideoModel video) {
+    final work = _favoriteWork(video);
+    final history = getHistory().map(_historyWork);
+    final existing = _matchingStorageId(work, history);
+    if (existing != null) return existing;
+    if (isNumericVodId(video.id) &&
+        work.sourceId == lziApiSourceId &&
+        _sourceIdFromName(video.source) != lziApiSourceId) {
+      return '$lziApiSourceId:${video.id}';
     }
-    return null;
+    return _storageIdForWrite(work, history, _loadTombstones()) ?? video.id;
   }
 
   Future<void> saveHistory(HistoryItem item) async {
@@ -1086,26 +1125,35 @@ class DatabaseService {
     if (clearedAt != null && !item.watchedAt.isAfter(clearedAt)) {
       return;
     }
-    final existing = _findHistory(item.videoId);
+    final history = getHistory();
+    final works = history.map(_historyWork);
+    final work = _historyWork(item);
+    final tombstones = _loadTombstones();
+    final id = _storageIdForWrite(work, works, tombstones);
+    if (id == null) return;
+    final existing = history.where((item) => item.videoId == id).firstOrNull;
     // 版本规则：已有记录比本次操作新时忽略（防止旧日志/晚到操作回退进度）。
     if (existing != null && existing.watchedAt.isAfter(item.watchedAt)) {
       return;
     }
-    final tombstones = _loadTombstones();
-    final deletedAt = tombstones[item.videoId];
     // 删除后又有更新的观看才允许恢复；早于删除时间的旧记录不复活。
-    if (deletedAt != null && !item.watchedAt.isAfter(deletedAt)) {
+    final deletionKeys = _deletionKeys(work, id, works, tombstones);
+    if (deletionKeys.any((key) => !item.watchedAt.isAfter(tombstones[key]!))) {
       return;
     }
-    final history = getHistory()..removeWhere((h) => h.videoId == item.videoId);
-    history.insert(0, item);
+    history.removeWhere((h) => h.videoId == id);
+    history.insert(
+      0,
+      id == item.videoId
+          ? item
+          : HistoryItem.fromJson({...item.toJson(), 'videoId': id}),
+    );
     if (history.length > _historyLimit) history.removeLast();
     await prefs.setString(
       _historyKey,
       jsonEncode(history.map((h) => h.toJson()).toList()),
     );
-    if (deletedAt != null) {
-      tombstones.remove(item.videoId);
+    if (_forgetAppliedDeletions(tombstones, deletionKeys)) {
       await _saveTombstones(tombstones);
     }
   }
@@ -1122,22 +1170,29 @@ class DatabaseService {
     final prefs = _store;
     if (prefs == null) return;
     final deletedAt = at ?? DateTime.now();
-    final existing = _findHistory(videoId);
+    final history = getHistory();
+    final existing =
+        history.where((item) => item.videoId == videoId).firstOrNull;
     // 已应用过的旧删除重试：不能撤销比删除时间更新的观看记录。
     if (existing != null && existing.watchedAt.isAfter(deletedAt)) {
       return;
     }
-    final history = getHistory()..removeWhere((h) => h.videoId == videoId);
+    final tombstones = _loadTombstones();
+    final deleted = _rememberDeletion(
+      tombstones,
+      videoId,
+      deletedAt,
+      work: existing == null ? null : _historyWork(existing),
+      otherWorks: history
+          .where((item) => item.videoId != videoId)
+          .map(_historyWork),
+    );
+    history.removeWhere((h) => h.videoId == videoId);
     await prefs.setString(
       _historyKey,
       jsonEncode(history.map((h) => h.toJson()).toList()),
     );
-    final tombstones = _loadTombstones();
-    final previous = tombstones[videoId];
-    if (previous == null || deletedAt.isAfter(previous)) {
-      tombstones[videoId] = deletedAt;
-      await _saveTombstones(tombstones);
-    }
+    if (deleted) await _saveTombstones(tombstones);
   }
 
   Future<void> clearHistory() async {
@@ -1172,10 +1227,15 @@ class DatabaseService {
         kept.add(item);
         continue;
       }
-      final previous = tombstones[item.videoId];
-      if (previous == null || clearedAt.isAfter(previous)) {
-        tombstones[item.videoId] = clearedAt;
-      }
+      _rememberDeletion(
+        tombstones,
+        item.videoId,
+        clearedAt,
+        work: _historyWork(item),
+        otherWorks: existing
+            .where((other) => other.watchedAt.isAfter(clearedAt))
+            .map(_historyWork),
+      );
     }
     if (kept.isEmpty) {
       await prefs.remove(_historyKey);
@@ -1400,6 +1460,175 @@ class DatabaseService {
   String? getActiveSourceId() => _store?.getString(_activeSourceKey);
 
   Future<void> setActiveSourceId(String id) => _setString(_activeSourceKey, id);
+
+  bool getSourceAutoFallback() =>
+      _store?.getBool(_sourceAutoFallbackKey) ?? false;
+
+  Future<void> setSourceAutoFallback(bool value) =>
+      _setBool(_sourceAutoFallbackKey, value);
+
+  /// 带前缀的作品 ID 已包含来源。旧收藏的 API 地址比名称更可靠。
+  String? sourceIdForFavorite(VideoModel favorite) {
+    if (!isNumericVodId(favorite.id)) {
+      return decodeSourceVideoId(favorite.id)?.sourceConfigId;
+    }
+    final sourceConfigId = favorite.sourceConfigId;
+    if (sourceConfigId != null && sourceConfigId.isNotEmpty) {
+      return sourceConfigId;
+    }
+    final url = favorite.sourceUrl?.trim();
+    if (url == null || url.isEmpty) return _sourceIdFromName(favorite.source);
+    final endpoint = _sourceEndpoint(url);
+    if (endpoint == null) return null;
+    final matches = getSources().where(
+      (source) => _sourceEndpoint(source.baseUrl) == endpoint,
+    );
+    return matches.singleOrNull?.id ??
+        matches
+            .where((source) => source.name == favorite.source)
+            .singleOrNull
+            ?.id;
+  }
+
+  /// 旧历史只有显示名称，必须唯一匹配才能确认片源。
+  String? sourceIdForHistory(HistoryItem item) =>
+      isNumericVodId(item.videoId)
+          ? _sourceIdFromName(item.sourceId)
+          : decodeSourceVideoId(item.videoId)?.sourceConfigId;
+
+  String? _sourceIdFromName(String? name) {
+    final normalized = name?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) return null;
+    return getSources()
+        .where((source) => source.name.trim().toLowerCase() == normalized)
+        .singleOrNull
+        ?.id;
+  }
+
+  static Uri? _sourceEndpoint(String value) {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || uri.host.isEmpty) return null;
+    return uri.replace(path: uri.path.replaceFirst(RegExp(r'/+$'), ''));
+  }
+
+  _StoredWork _favoriteWork(VideoModel video) => (
+    id: video.id,
+    title: video.title,
+    sourceId: sourceIdForFavorite(video),
+  );
+
+  _StoredWork _historyWork(HistoryItem item) => (
+    id: item.videoId,
+    title: item.title,
+    sourceId: sourceIdForHistory(item),
+  );
+
+  static String? _matchingStorageId(
+    _StoredWork work,
+    Iterable<_StoredWork> records,
+  ) {
+    final identity = decodeSourceVideoId(work.id);
+    final incomingBare = isNumericVodId(work.id);
+    final title = work.title.trim().toLowerCase();
+    String? alias;
+    for (final record in records) {
+      if (record.id == work.id && !incomingBare) return record.id;
+
+      if (title.isEmpty || record.title.trim().toLowerCase() != title) continue;
+      if (work.sourceId != record.sourceId) continue;
+      if (record.id == work.id) return record.id;
+
+      if (work.sourceId != null &&
+          identity != null &&
+          (incomingBare || isNumericVodId(record.id)) &&
+          decodeSourceVideoId(record.id)?.vodId == identity.vodId) {
+        alias = record.id;
+      }
+    }
+    return alias;
+  }
+
+  // 只有发生碰撞时才替换荔枝 API 的裸号存储键。删掉旧记录后继续保留
+  // 对裸号的占用，防止旧客户端迟到的裸号删除操作误删另一片源的记录。
+  static String _legacyBareKey(String id) => '\u0000legacy-bare:$id';
+
+  static String? _storageIdForWrite(
+    _StoredWork work,
+    Iterable<_StoredWork> records,
+    Map<String, DateTime> tombstones,
+  ) {
+    final existing = _matchingStorageId(work, records);
+    if (existing != null) return existing;
+    if (!isNumericVodId(work.id)) return work.id;
+
+    final bareOccupied =
+        tombstones.containsKey(_legacyBareKey(work.id)) ||
+        records.any((record) => record.id == work.id);
+    final sourceId = work.sourceId;
+    if (sourceId == null) return bareOccupied ? null : work.id;
+    if (sourceId == lziApiSourceId && !bareOccupied) return work.id;
+    return '$sourceId:${work.id}';
+  }
+
+  static Set<String> _deletionKeys(
+    _StoredWork work,
+    String storageId,
+    Iterable<_StoredWork> records,
+    Map<String, DateTime> tombstones,
+  ) {
+    final keys = {storageId};
+    final vodId = decodeSourceVideoId(work.id)?.vodId;
+    if (vodId != null && work.sourceId != null) {
+      final qualifiedId = '${work.sourceId}:$vodId';
+      if (!records.any((record) => record.id == qualifiedId)) {
+        keys.add(qualifiedId);
+      }
+      if (isNumericVodId(work.id) &&
+          !records.any((record) => record.id == vodId) &&
+          !(work.sourceId == lziApiSourceId &&
+              tombstones.containsKey(_legacyBareKey(vodId)))) {
+        keys.add(vodId);
+      }
+    }
+    return keys.where(tombstones.containsKey).toSet();
+  }
+
+  static bool _forgetAppliedDeletions(
+    Map<String, DateTime> tombstones,
+    Set<String> keys,
+  ) {
+    // 已退役的旧裸号仍需拒绝旧客户端的迟到写入。
+    keys.removeWhere((id) => tombstones.containsKey(_legacyBareKey(id)));
+    keys.forEach(tombstones.remove);
+    return keys.isNotEmpty;
+  }
+
+  static bool _rememberDeletion(
+    Map<String, DateTime> tombstones,
+    String id,
+    DateTime at, {
+    required _StoredWork? work,
+    required Iterable<_StoredWork> otherWorks,
+  }) {
+    final keys = {id};
+    final sourceId = work?.sourceId;
+    if (sourceId != null && isNumericVodId(id)) {
+      final qualifiedId = '$sourceId:$id';
+      if (!otherWorks.any((record) => record.id == qualifiedId)) {
+        keys.add(qualifiedId);
+      }
+      if (sourceId != lziApiSourceId) keys.add(_legacyBareKey(id));
+    }
+    var changed = false;
+    for (final key in keys) {
+      final previous = tombstones[key];
+      if (previous == null || at.isAfter(previous)) {
+        tombstones[key] = at;
+        changed = true;
+      }
+    }
+    return changed;
+  }
 
   // ---------------------------------------------------------------------------
   // 测试辅助 / 通用

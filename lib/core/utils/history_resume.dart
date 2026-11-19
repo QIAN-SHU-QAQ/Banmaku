@@ -27,8 +27,8 @@ class HistoryResumeTarget {
 ///
 /// 历史里保存的是播放时的剧集快照，地址可能已经过期。续播时必须先用
 /// [fetchDetail] 重新拉取作品详情，并确认新详情确实属于原作品：
-/// - 作品 ID 必须一致；主源裸 ID 在不同数据源之间会重名，因此还要比对
-///   来源标识与标题，身份不符时返回 null（转人工选集）；
+/// - 作品 ID、来源和标题需要一致。旧裸 ID 可能跨源重名，片源也可能
+///   重新分配作品 ID；
 /// - 剧集优先用稳定 ID，其次 URL，最后用**唯一**标题定位；
 /// - 缺集、重复标题、信息不足或无法唯一确认时返回 null，不再按下标猜；
 /// - 详情刷新失败、没有剧集、或拿不到播放地址时返回 null。
@@ -93,9 +93,7 @@ bool _isSameWork(HistoryItem item, VideoModel fresh) {
   // 标题兜底：旧历史没有来源标识，或同源 ID 被复用时，标题明显不同即拒绝。
   final stored = _normalizeTitle(item.title);
   final current = _normalizeTitle(fresh.title);
-  if (stored.isEmpty || current.isEmpty) return false;
-  if (stored == current) return true;
-  return stored.contains(current) || current.contains(stored);
+  return stored.isNotEmpty && stored == current;
 }
 
 EpisodeModel? _snapshotEpisode(HistoryItem item) {

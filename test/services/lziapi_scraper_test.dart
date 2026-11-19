@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_play/core/network/http_client.dart';
 import 'package:nova_play/services/scraper/lziapi_scraper.dart';
+import 'package:nova_play/services/scraper/source_config.dart';
 
 class _Adapter implements HttpClientAdapter {
   _Adapter(this.respond);
@@ -189,6 +190,29 @@ void main() {
     await expectLater(scraper.getByCategory('港台动漫'), throwsException);
     expect(adapter.requests.length, 2);
   });
+  test('自定义主源使用自己的分类编号，全部不限制分类', () async {
+    final defaults = SourceConfig.defaults();
+    final custom = LziApiScraper(primary: defaults.last, fallbacks: []);
+    respond((o) {
+      if (o.queryParameters['ac'] == 'list') {
+        return {
+          'code': 1,
+          'class': [
+            {'type_id': 40, 'type_name': '日韩动漫'},
+            {'type_id': 50, 'type_name': '喜剧'},
+          ],
+        };
+      }
+      return _list([_video(1)]);
+    });
+
+    expect(await custom.getCategories(), ['全部', '日韩动漫', '喜剧']);
+    expect((await custom.getByCategory('喜剧')).single.id, '360zy:1');
+    expect(adapter.requests.last.queryParameters['t'], '50');
+    expect((await custom.getByCategory('全部')).single.id, '360zy:1');
+    expect(adapter.requests.last.queryParameters, isNot(contains('t')));
+    expect(adapter.requests.length, 3);
+  });
   test('带来源 ID 的详情只请求对应源', () async {
     respond((o) {
       expect(o.uri.host, '360zy.com');
@@ -259,6 +283,55 @@ void main() {
     respond((o) => _list([]));
     await expectLater(scraper.getDetail('unknown:1'), throwsException);
     expect(adapter.requests, isEmpty);
+  });
+  test('裸数字 ID 不会请求已禁用或缺失的 LziApi', () async {
+    final defaults = SourceConfig.defaults();
+    final custom = LziApiScraper(
+      primary: defaults.last,
+      fallbacks: [defaults.first.copyWith(enabled: false)],
+    );
+    respond((_) => _list([_video(1)]));
+
+    await expectLater(custom.getDetail('1'), throwsException);
+    await expectLater(custom.getDetail('lziapi:1'), throwsException);
+    expect(adapter.requests, isEmpty);
+  });
+  test('已禁用的当前源不会收到分类请求', () async {
+    final disabled = LziApiScraper(
+      primary: SourceConfig.defaults().last.copyWith(enabled: false),
+      fallbacks: [],
+    );
+    respond((_) => _list([]));
+
+    expect(await disabled.getCategories(), ['全部']);
+    expect(adapter.requests, isEmpty);
+  });
+  test('以原来源查询旧裸数字 ID 只请求对应来源', () async {
+    respond((o) => _list([_video(1, host: o.uri.host)]));
+    final detail = await scraper.getDetailFromSource('360zy', '1');
+    expect(detail.id, '360zy:1');
+    expect(detail.episodes!.single.playUrl, 'https://360zy.com/1.m3u8');
+    expect(adapter.requests.single.uri.host, '360zy.com');
+  });
+  test('关闭备用详情替换后只请求作品所属源', () async {
+    final scoped = LziApiScraper(allowDetailPlaybackSubstitution: false);
+    respond((o) => _list([_video(1, host: o.uri.host)]));
+
+    final detail = await scoped.getDetail('1');
+    expect(detail.episodes!.single.playUrl, 'https://cj.lziapi.com/1.m3u8');
+    expect(adapter.requests.single.uri.host, 'cj.lziapi.com');
+  });
+  test('关闭列表回退后仍能按作品 ID 查询备用源', () async {
+    final scoped = LziApiScraper(allowListFallback: false);
+    respond((o) {
+      if (o.uri.host == 'cj.lziapi.com') return _fail(o);
+      return _list([_video(1)]);
+    });
+
+    await expectLater(scoped.search('番剧'), throwsException);
+    expect(adapter.requests.single.uri.host, 'cj.lziapi.com');
+    expect((await scoped.getDetail('360zy:1')).id, '360zy:1');
+    expect(adapter.requests.last.uri.host, '360zy.com');
   });
   test('切换剧集地址时保持主源剧集顺序', () async {
     respond((o) {
