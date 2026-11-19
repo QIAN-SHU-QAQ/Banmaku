@@ -62,6 +62,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _refresh() async {
+    ref.invalidate(categoriesProvider);
     final category = ref.read(selectedCategoryProvider);
     if (category == '全部') {
       await ref.read(videoListProvider.notifier).refresh();

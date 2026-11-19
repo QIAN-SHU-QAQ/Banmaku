@@ -18,6 +18,7 @@ import 'fakes.dart';
 class LibraryScraper extends FakeScraper {
   final homePages = <int>[];
   bool failHome = false;
+  bool failCategories = false;
   bool empty = false;
   Completer<VideoModel>? detailCompleter;
 
@@ -28,7 +29,10 @@ class LibraryScraper extends FakeScraper {
   );
 
   @override
-  Future<List<String>> getCategories() async => ['全部', '动画'];
+  Future<List<String>> getCategories() async {
+    if (failCategories) throw StateError('测试分类加载失败');
+    return ['全部', '动画'];
+  }
 
   @override
   Future<List<VideoModel>> getHome({int page = 1}) async {
@@ -144,6 +148,19 @@ Future<GoRouter> pumpHome(
 }
 
 void main() {
+  testWidgets('Refreshing an available source also retries its category list', (
+    tester,
+  ) async {
+    final scraper = LibraryScraper()..failCategories = true;
+    await pumpHome(tester, scraper, const Size(1120, 720));
+    expect(find.byType(CategoryTabs), findsNothing);
+
+    scraper.failCategories = false;
+    await tester.tap(find.byTooltip('刷新'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(CategoryTabs, '动画'), findsOneWidget);
+  });
+
   testWidgets('Empty feed offers retry', (tester) async {
     final scraper = LibraryScraper()..empty = true;
     await pumpHome(tester, scraper, const Size(1120, 720));
