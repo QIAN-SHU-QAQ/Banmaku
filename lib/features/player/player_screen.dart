@@ -59,6 +59,10 @@ class PlayerScreen extends ConsumerStatefulWidget {
   /// 作品来源标识（数据源名称），随历史保存以便续播时确认作品身份。
   final String? sourceId;
 
+  /// 已确认的播放来源名称，可能与历史记录中的名称不同。
+  final String? sourceName;
+  final bool isLocalFile;
+
   const PlayerScreen({
     super.key,
     required this.videoUrl,
@@ -70,6 +74,8 @@ class PlayerScreen extends ConsumerStatefulWidget {
     this.videoTitle,
     this.cover,
     this.sourceId,
+    this.sourceName,
+    this.isLocalFile = false,
   });
 
   @override
@@ -621,6 +627,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   Widget _buildTopBar({bool overlay = false}) {
+    final source =
+        widget.isLocalFile
+            ? '本地文件'
+            : (widget.sourceName ?? widget.sourceId)?.trim();
+    final colors = _playerTheme.colorScheme;
     return Container(
       color: overlay ? Colors.black.withValues(alpha: 0.55) : Colors.black,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -631,15 +642,54 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             onPressed: _exitScreen,
           ),
           Expanded(
-            child: Text(
-              _session.title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Row(
+              children: [
+                Flexible(
+                  flex: 3,
+                  child: Text(
+                    _session.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (source != null && source.isNotEmpty)
+                  Flexible(
+                    flex: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Tooltip(
+                        message: source,
+                        excludeFromSemantics: true,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            child: Text(
+                              source,
+                              style: TextStyle(
+                                color: colors.onSurface,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           if (_isFullscreen)
@@ -772,95 +822,113 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           // 进度条（含缓冲指示）
           _buildProgressBar(),
           const SizedBox(height: 2),
-          Row(
-            children: [
-              // 播放/暂停
-              StreamBuilder<bool>(
-                stream: _player.stream.playing,
-                initialData: _player.state.playing,
-                builder: (context, snap) {
-                  final playing = snap.data ?? false;
-                  return IconButton(
-                    tooltip: playing ? '暂停 (空格)' : '播放 (空格)',
-                    icon: Icon(
-                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      color: Colors.white,
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    // 播放/暂停
+                    StreamBuilder<bool>(
+                      stream: _player.stream.playing,
+                      initialData: _player.state.playing,
+                      builder: (context, snap) {
+                        final playing = snap.data ?? false;
+                        return IconButton(
+                          tooltip: playing ? '暂停 (空格)' : '播放 (空格)',
+                          icon: Icon(
+                            playing
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            color: Colors.white,
+                          ),
+                          onPressed: _togglePlay,
+                        );
+                      },
                     ),
-                    onPressed: _togglePlay,
-                  );
-                },
-              ),
 
-              // 上一集 / 下一集
-              if (hasEpisodes) ...[
-                IconButton(
-                  tooltip: '上一集',
-                  icon: const Icon(
-                    Icons.skip_previous_rounded,
-                    color: Colors.white,
-                  ),
-                  onPressed:
-                      _currentIndex > 0
-                          ? () => _playEpisode(_currentIndex - 1)
-                          : null,
+                    // 上一集 / 下一集
+                    if (hasEpisodes) ...[
+                      IconButton(
+                        tooltip: '上一集',
+                        icon: const Icon(
+                          Icons.skip_previous_rounded,
+                          color: Colors.white,
+                        ),
+                        onPressed:
+                            _currentIndex > 0
+                                ? () => _playEpisode(_currentIndex - 1)
+                                : null,
+                      ),
+                      IconButton(
+                        tooltip: '下一集',
+                        icon: const Icon(
+                          Icons.skip_next_rounded,
+                          color: Colors.white,
+                        ),
+                        onPressed:
+                            _currentIndex < widget.episodes!.length - 1
+                                ? () => _playEpisode(_currentIndex + 1)
+                                : null,
+                      ),
+                    ],
+
+                    // 弹幕开关
+                    IconButton(
+                      tooltip: danmaku.enabled ? '关闭弹幕' : '开启弹幕',
+                      icon: Icon(
+                        danmaku.enabled
+                            ? Icons.subtitles_rounded
+                            : Icons.subtitles_off_rounded,
+                        color:
+                            danmaku.enabled
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.55),
+                      ),
+                      onPressed: _toggleDanmaku,
+                    ),
+
+                    // 手动匹配弹幕（R5）
+                    IconButton(
+                      tooltip: '手动匹配弹幕',
+                      icon: Icon(
+                        Icons.manage_search_rounded,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                      onPressed:
+                          danmaku.hasCredentials
+                              ? _showDanmakuMatchDialog
+                              : null,
+                    ),
+                  ],
                 ),
-                IconButton(
-                  tooltip: '下一集',
-                  icon: const Icon(
-                    Icons.skip_next_rounded,
-                    color: Colors.white,
-                  ),
-                  onPressed:
-                      _currentIndex < widget.episodes!.length - 1
-                          ? () => _playEpisode(_currentIndex + 1)
-                          : null,
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    // 倍速
+                    _buildSpeedMenu(),
+
+                    // 音量
+                    _buildVolumeMenu(),
+
+                    // 全屏切换
+                    IconButton(
+                      tooltip: _isFullscreen ? '退出全屏 (F)' : '全屏 (F)',
+                      icon: Icon(
+                        _isFullscreen
+                            ? Icons.fullscreen_exit
+                            : Icons.fullscreen,
+                        color: Colors.white,
+                      ),
+                      onPressed: _toggleFullscreen,
+                    ),
+                  ],
                 ),
               ],
-
-              // 弹幕开关
-              IconButton(
-                tooltip: danmaku.enabled ? '关闭弹幕' : '开启弹幕',
-                icon: Icon(
-                  danmaku.enabled
-                      ? Icons.subtitles_rounded
-                      : Icons.subtitles_off_rounded,
-                  color:
-                      danmaku.enabled
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.55),
-                ),
-                onPressed: _toggleDanmaku,
-              ),
-
-              // 手动匹配弹幕（R5）
-              IconButton(
-                tooltip: '手动匹配弹幕',
-                icon: Icon(
-                  Icons.manage_search_rounded,
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
-                onPressed:
-                    danmaku.hasCredentials ? _showDanmakuMatchDialog : null,
-              ),
-
-              const Spacer(),
-
-              // 倍速
-              _buildSpeedMenu(),
-
-              // 音量
-              _buildVolumeMenu(),
-
-              // 全屏切换
-              IconButton(
-                tooltip: _isFullscreen ? '退出全屏 (F)' : '全屏 (F)',
-                icon: Icon(
-                  _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                  color: Colors.white,
-                ),
-                onPressed: _toggleFullscreen,
-              ),
-            ],
+            ),
           ),
         ],
       ),

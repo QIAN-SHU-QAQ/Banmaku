@@ -1,19 +1,235 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:nova_play/core/utils/play_launcher.dart';
+import 'package:nova_play/features/download/download_screen.dart';
 import 'package:nova_play/features/player/player_screen.dart';
+import 'package:nova_play/features/player/player_window.dart';
 import 'package:nova_play/models/history_item.dart';
 import 'package:nova_play/models/video_model.dart';
+import 'package:nova_play/providers/scraper_provider.dart';
 import 'package:nova_play/services/database_service.dart';
+import 'package:nova_play/services/download_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'playback_session_test.dart' show FakePlatform;
 
 void main() {
+  group('播放窗口来源', () {
+    late FakePlatform platform;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      platform = FakePlatform();
+    });
+
+    Future<void> pumpPlayback(
+      WidgetTester tester,
+      Widget app, {
+      List<Override> overrides = const [],
+    }) async {
+      tester.view.physicalSize = const Size(616, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playerFactoryProvider.overrideWithValue(
+              () => Player(platformPlayer: platform),
+            ),
+            playerSurfaceProvider.overrideWithValue(
+              (_) => const ColoredBox(color: Colors.black),
+            ),
+            ...overrides,
+          ],
+          child: app,
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    // Exercise the same argument decoding as the detached Windows process.
+    MaterialApp routeToPlayerWindow(Widget home) {
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, _) => home),
+          GoRoute(
+            path: '/player',
+            builder:
+                (_, state) => PlayerWindowApp(
+                  arguments:
+                      jsonDecode(jsonEncode(state.extra))
+                          as Map<String, dynamic>,
+                ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      return MaterialApp.router(routerConfig: router);
+    }
+
+    testWidgets('搜索源 B 时显示历史续播确认的源 A，窗口和全屏都保留标题与来源', (tester) async {
+      final db = DatabaseService()..resetForTest();
+      await db.init();
+      addTearDown(db.resetForTest);
+      await db.setActiveSourceId('360zy');
+      const sourceName = '片源 A · 这是重新命名后确认的完整片库名称与说明';
+      const title = '这是一个需要在窄播放器窗口里完整处理截断的作品名称与相关动画长标题';
+      final saved = HistoryItem(
+        videoId: 'lziapi:28',
+        title: title,
+        sourceId: '片源 A 的旧名称',
+        episodes: [
+          EpisodeModel(id: 'old_2', title: '第 2 集', url: 'https://old.test/2'),
+        ],
+        episodeIndex: 0,
+        position: const Duration(seconds: 180),
+        watchedAt: DateTime(2026, 11, 19),
+      );
+      const url = 'https://source-a.test/2.m3u8';
+      const fullscreenChannel = MethodChannel(
+        'com.alexmercerind/media_kit_video',
+      );
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final fullscreenCalls = <String>[];
+      messenger.setMockMethodCallHandler(fullscreenChannel, (call) async {
+        fullscreenCalls.add(call.method);
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(fullscreenChannel, null),
+      );
+
+      await pumpPlayback(
+        tester,
+        routeToPlayerWindow(
+          Consumer(
+            builder:
+                (context, ref, _) => Scaffold(
+                  body: TextButton(
+                    onPressed: () {
+                      expect(ref.read(activeSourceConfigProvider).id, '360zy');
+                      resumeFromOriginalSource(context, ref, saved);
+                    },
+                    child: const Text('续播历史'),
+                  ),
+                ),
+          ),
+        ),
+        overrides: [
+          originalSourceDetailProvider.overrideWithValue((
+            id,
+            sourceConfigId,
+          ) async {
+            expect(id, saved.videoId);
+            expect(sourceConfigId, 'lziapi');
+            return VideoModel(
+              id: '28',
+              title: title,
+              source: sourceName,
+              episodes: [EpisodeModel(id: 'fresh_2', title: '第 2 集', url: url)],
+            );
+          }),
+        ],
+      );
+      await tester.tap(find.text('续播历史'));
+      await tester.pumpAndSettle();
+
+      final player = tester.widget<PlayerScreen>(find.byType(PlayerScreen));
+      expect(player.videoId, saved.videoId);
+      expect(player.sourceId, saved.sourceId);
+      expect(platform.opened, [url]);
+      expect(platform.starts, [saved.position]);
+      final heading = find.text('$title - 第 2 集');
+      final source = find.byTooltip(sourceName);
+      expect(heading, findsOneWidget);
+      expect(source, findsOneWidget);
+      expect(tester.getSize(heading).width, greaterThan(0));
+      expect(tester.getCenter(source).dy, tester.getCenter(heading).dy);
+      expect(find.text('360zy'), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.pumpAndSettle();
+      expect(heading, findsOneWidget);
+      expect(source, findsOneWidget);
+      expect(find.byTooltip('退出全屏 (Esc)'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(fullscreenCalls, [
+        'Utils.EnterNativeFullscreen',
+        'Utils.ExitNativeFullscreen',
+      ]);
+
+      platform.emitPosition(const Duration(seconds: 181));
+      platform.emitPosition(const Duration(seconds: 182));
+      await tester.pump(const Duration(seconds: 5));
+      final history = db.getHistory().single;
+      expect(history.videoId, saved.videoId);
+      expect(history.sourceId, saved.sourceId);
+      expect(history.position, const Duration(seconds: 182));
+      expect(platform.opened, [url]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('下载页播放已有文件时，播放窗口显示本地文件', (tester) async {
+      final directory = Directory.systemTemp.createTempSync(
+        'nova-player-test-',
+      );
+      final file = File('${directory.path}/episode.ts')..writeAsBytesSync([1]);
+      addTearDown(() {
+        file.deleteSync();
+        directory.deleteSync();
+      });
+      final task = DownloadTask(
+        id: 'downloaded-episode',
+        title: '已下载作品',
+        url: 'https://example.test/episode.m3u8',
+        savePath: file.path,
+        status: DownloadStatus.completed,
+        createdAt: DateTime(2026, 11, 19),
+      );
+      SharedPreferences.setMockInitialValues({
+        'downloads_v1': jsonEncode([task.toJson()]),
+      });
+      await pumpPlayback(tester, routeToPlayerWindow(const DownloadScreen()));
+      await tester.tap(find.text(task.title));
+      await tester.pumpAndSettle();
+
+      final player = tester.widget<PlayerScreen>(find.byType(PlayerScreen));
+      expect(player.videoUrl, file.path);
+      expect(find.text('本地文件'), findsOneWidget);
+    });
+
+    testWidgets('旧播放窗口参数缺少来源时省略标签', (tester) async {
+      await pumpPlayback(
+        tester,
+        const PlayerWindowApp(
+          arguments: {
+            'videoUrl': 'https://example.test/episode.m3u8',
+            'title': '来源未知的作品',
+          },
+        ),
+      );
+
+      final heading = find.text('来源未知的作品');
+      expect(heading, findsOneWidget);
+      final headingRow = find.ancestor(of: heading, matching: find.byType(Row));
+      expect(
+        find.descendant(of: headingRow.first, matching: find.byType(Tooltip)),
+        findsNothing,
+      );
+    });
+  });
+
   testWidgets('error retry, episode title and Esc fullscreen restore', (
     tester,
   ) async {

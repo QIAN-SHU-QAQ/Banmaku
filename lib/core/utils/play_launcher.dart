@@ -36,6 +36,8 @@ Future<void> launchPlayer(
   String? videoTitle,
   String? cover,
   String? sourceId,
+  String? sourceName,
+  bool isLocalFile = false,
 }) async {
   final extra = <String, dynamic>{
     'videoUrl': videoUrl,
@@ -47,6 +49,8 @@ Future<void> launchPlayer(
     'videoTitle': videoTitle,
     'cover': cover,
     'sourceId': sourceId,
+    'sourceName': sourceName,
+    'isLocalFile': isLocalFile,
     // 主进程配置桥端口：播放器的进度/设置写入经由主进程持久化。
     'bridgePort': PrefsBridgeServer.instance?.port,
   };
@@ -75,22 +79,15 @@ Future<void> resumeFromOriginalSource(
   WidgetRef ref,
   HistoryItem item,
 ) {
+  final isMacCms = ref.read(currentScraperProvider) is LziApiScraper;
   return launchHistoryResume(
     context,
     item,
-    fetchDetail: () async {
+    fetchDetail: () {
       final fetch = ref.read(originalSourceDetailProvider);
-      final isMacCms = ref.read(currentScraperProvider) is LziApiScraper;
-      final original = await fetch(
-        item.videoId,
-        DatabaseService().sourceIdForHistory(item),
-      );
-      // A verified source may use a canonical ID and display name that differ
-      // from the saved record. Preserve the record's keys for episode matching.
-      return isMacCms
-          ? original.copyWith(id: item.videoId, source: item.sourceId)
-          : original;
+      return fetch(item.videoId, DatabaseService().sourceIdForHistory(item));
     },
+    preserveSavedIdentity: isMacCms,
     onSwitchSource: () => pickSourceForSearch(context, ref, item.title),
   );
 }
@@ -103,6 +100,7 @@ Future<void> launchHistoryResume(
   BuildContext context,
   HistoryItem item, {
   Future<VideoModel?> Function()? fetchDetail,
+  bool preserveSavedIdentity = false,
   Future<void> Function()? onSwitchSource,
 }) async {
   if (_resuming.contains(item.videoId)) return;
@@ -137,11 +135,20 @@ Future<void> launchHistoryResume(
 
   try {
     HistoryResumeTarget? target;
+    String? sourceName;
     if (fetchDetail != null) {
       do {
         target = await resolveHistoryResumeTarget(
           item,
-          fetchDetail: fetchDetail,
+          fetchDetail: () async {
+            final original = await fetchDetail();
+            sourceName = original?.source;
+            // MacCMS already verified the source. Keep the saved lookup keys
+            // for matching and history, and display the confirmed source name.
+            return preserveSavedIdentity
+                ? original?.copyWith(id: item.videoId, source: item.sourceId)
+                : original;
+          },
         );
         if (!stillActive()) return;
         if (target != null || onSwitchSource == null) break;
@@ -222,6 +229,7 @@ Future<void> launchHistoryResume(
       videoTitle: item.title,
       cover: target.cover,
       sourceId: target.sourceId ?? item.sourceId,
+      sourceName: sourceName,
     );
   } finally {
     router?.routerDelegate.removeListener(noteRouteChange);

@@ -58,6 +58,7 @@ class DownloadScreen extends ConsumerWidget {
                                     title: tasks[index].title,
                                     videoId: tasks[index].videoId,
                                     videoTitle: tasks[index].title,
+                                    isLocalFile: true,
                                   )
                                   : null,
                         ),
