@@ -34,12 +34,16 @@ class PosterCard extends StatefulWidget {
     this.onTap,
     this.onPlay,
     this.showSource = false,
+    this.previewsOnEnter = false,
+    this.selected = false,
   });
 
   final VideoModel video;
   final VoidCallback? onTap;
   final VoidCallback? onPlay;
   final bool showSource;
+  final bool previewsOnEnter;
+  final bool selected;
 
   static const _titleSize = 13.0;
   static const _metadataSize = 11.0;
@@ -72,6 +76,7 @@ class _PosterCardState extends State<PosterCard> {
   static final _radius = BorderRadius.circular(8);
   bool _hovered = false;
   bool _focused = false;
+  bool _playFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -87,122 +92,140 @@ class _PosterCardState extends State<PosterCard> {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .join(' · ');
-    final primaryAction = widget.onPlay ?? widget.onTap;
+    final overlayAction = widget.onPlay ?? widget.onTap;
+    final isPreview = widget.previewsOnEnter;
 
     return CallbackShortcuts(
       bindings: {
-        if (primaryAction != null) ...{
-          const SingleActivator(LogicalKeyboardKey.enter): primaryAction,
-          const SingleActivator(LogicalKeyboardKey.numpadEnter): primaryAction,
+        if (!isPreview && overlayAction != null) ...{
+          const SingleActivator(LogicalKeyboardKey.enter): overlayAction,
+          const SingleActivator(LogicalKeyboardKey.numpadEnter): overlayAction,
         },
       },
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: _radius,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: widget.onTap ?? widget.onPlay,
-          onHover: (value) => setState(() => _hovered = value),
-          onFocusChange: (value) => setState(() => _focused = value),
+      child: Semantics(
+        selected: isPreview ? widget.selected : null,
+        child: Material(
+          color: widget.selected ? colors.primaryContainer : Colors.transparent,
           borderRadius: _radius,
-          hoverColor: colors.onSurface.withValues(alpha: 0.05),
-          focusColor: colors.primary.withValues(alpha: 0.09),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: AspectRatio(
-                    aspectRatio: 2 / 3,
-                    child: ClipRRect(
-                      borderRadius: _radius,
-                      child: Container(
-                        foregroundDecoration: BoxDecoration(
-                          borderRadius: _radius,
-                          border: Border.all(
-                            color:
-                                _focused
-                                    ? colors.primary
-                                    : colors.outlineVariant,
-                            width: _focused ? 2 : 1,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap ?? widget.onPlay,
+            onHover: (value) => setState(() => _hovered = value),
+            onFocusChange: (value) => setState(() => _focused = value),
+            borderRadius: _radius,
+            hoverColor: colors.onSurface.withValues(alpha: 0.05),
+            focusColor: colors.primary.withValues(alpha: 0.09),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: AspectRatio(
+                      aspectRatio: 2 / 3,
+                      child: ClipRRect(
+                        borderRadius: _radius,
+                        child: Container(
+                          foregroundDecoration: BoxDecoration(
+                            borderRadius: _radius,
+                            border: Border.all(
+                              color:
+                                  _focused || _playFocused || widget.selected
+                                      ? colors.primary
+                                      : colors.outlineVariant,
+                              width:
+                                  _focused || _playFocused || widget.selected
+                                      ? 2
+                                      : 1,
+                            ),
                           ),
-                        ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            _cover(colors, video.cover),
-                            if ((_hovered || _focused) && primaryAction != null)
-                              Center(
-                                child: Focus(
-                                  canRequestFocus: false,
-                                  descendantsAreFocusable: false,
-                                  child: ExcludeSemantics(
-                                    excluding: widget.onPlay == null,
-                                    child: IconButton.filled(
-                                      onPressed: primaryAction,
-                                      tooltip:
-                                          widget.onPlay == null ? '打开详情' : '播放',
-                                      icon: Icon(
-                                        widget.onPlay == null
-                                            ? Icons.arrow_outward_rounded
-                                            : Icons.play_arrow_rounded,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              _cover(colors, video.cover),
+                              if ((_hovered || _focused || _playFocused) &&
+                                  overlayAction != null)
+                                Center(
+                                  child: Focus(
+                                    canRequestFocus: false,
+                                    descendantsAreFocusable:
+                                        isPreview && widget.onPlay != null,
+                                    onFocusChange: (value) {
+                                      if (_playFocused != value) {
+                                        setState(() => _playFocused = value);
+                                      }
+                                    },
+                                    child: ExcludeSemantics(
+                                      excluding: widget.onPlay == null,
+                                      child: IconButton.filled(
+                                        onPressed: overlayAction,
+                                        tooltip:
+                                            widget.onPlay != null
+                                                ? '播放'
+                                                : isPreview
+                                                ? '预览作品'
+                                                : '打开详情',
+                                        icon: Icon(
+                                          widget.onPlay == null
+                                              ? Icons.arrow_outward_rounded
+                                              : Icons.play_arrow_rounded,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  2,
-                  PosterCard._titleTop,
-                  2,
-                  0,
-                ),
-                child: SizedBox(
-                  height: PosterCard._titleHeight(scaler),
-                  child: Text(
-                    video.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: PosterCard._titleSize,
-                      height: PosterCard._lineHeight,
-                      fontWeight: FontWeight.w600,
-                      color: colors.onSurface,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    2,
+                    PosterCard._titleTop,
+                    2,
+                    0,
+                  ),
+                  child: SizedBox(
+                    height: PosterCard._titleHeight(scaler),
+                    child: Text(
+                      video.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: PosterCard._titleSize,
+                        height: PosterCard._lineHeight,
+                        fontWeight: FontWeight.w600,
+                        color: colors.onSurface,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  2,
-                  PosterCard._metadataTop,
-                  2,
-                  PosterCard._captionBottom,
-                ),
-                child: SizedBox(
-                  height: PosterCard._metadataHeight(scaler),
-                  child: Text(
-                    metadata.isEmpty ? (video.description ?? '') : metadata,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: PosterCard._metadataSize,
-                      height: PosterCard._lineHeight,
-                      color: colors.onSurfaceVariant,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    2,
+                    PosterCard._metadataTop,
+                    2,
+                    PosterCard._captionBottom,
+                  ),
+                  child: SizedBox(
+                    height: PosterCard._metadataHeight(scaler),
+                    child: Text(
+                      metadata.isEmpty ? (video.description ?? '') : metadata,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: PosterCard._metadataSize,
+                        height: PosterCard._lineHeight,
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

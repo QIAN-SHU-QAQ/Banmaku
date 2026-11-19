@@ -77,6 +77,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           return DetailScreen(
             id: id,
             autoplay: state.uri.queryParameters['play'] == '1',
+            chooseEpisode: state.uri.queryParameters['chooseEpisode'] == '1',
             savedVideo: saved is VideoModel ? saved : null,
           );
         },

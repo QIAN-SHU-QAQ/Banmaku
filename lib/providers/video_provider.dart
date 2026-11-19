@@ -103,13 +103,19 @@ final videoListProvider =
     });
 
 /// 视频详情 Provider
-final videoDetailProvider = FutureProvider.family<VideoModel, String>((
-  ref,
-  url,
-) async {
-  final scraper = ref.watch(currentScraperProvider);
-  return scraper.getDetail(url);
-});
+final videoDetailProvider = FutureProvider.autoDispose
+    .family<VideoModel, String>((ref, id) {
+      final scraper = ref.watch(currentScraperProvider);
+      return ref.watch(
+        sourceVideoDetailProvider((scraper: scraper, id: id)).future,
+      );
+    });
+
+/// 同一片源版本的预览和详情共用请求。切源后，旧预览不会主动发起新请求。
+final sourceVideoDetailProvider = FutureProvider.autoDispose
+    .family<VideoModel, ({BaseScraper scraper, String id})>(
+      (ref, lookup) => lookup.scraper.getDetail(lookup.id),
+    );
 
 final savedVideoDetailProvider = FutureProvider.autoDispose
     .family<VideoModel, VideoModel>((ref, video) async {

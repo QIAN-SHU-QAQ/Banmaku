@@ -7,8 +7,10 @@ import '../../models/video_model.dart';
 import '../../providers/scraper_provider.dart';
 import '../../providers/search_provider.dart';
 import '../../services/database_service.dart';
+import '../../services/scraper/base_scraper.dart';
 import '../../shared/widgets/poster_card.dart';
 import '../../shared/widgets/source_picker.dart';
+import 'widgets/search_result_preview.dart';
 
 /// 全屏搜索页（覆盖整个窗口，不走 Rail shell）：
 /// 搜索框 + 筛选 chips + 结果计数 + 海报/列表视图切换。
@@ -29,7 +31,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   bool _showAsGrid = true;
   String? _genreFilter;
+  ({String id, BaseScraper scraper})? _selection;
   String _submittedKeyword = '';
+  int _queryRevision = 0;
+
+  bool get _isSourceRecovery => widget.initialKeyword != null;
+  String? get _selectedId => _selection?.id;
 
   ProviderListenable<SearchState> get _search =>
       widget.initialKeyword == null
@@ -61,7 +68,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             !identical(ref.read(currentScraperProvider), scraper)) {
           return;
         }
-        setState(() => _genreFilter = null);
+        setState(_resetResultsView);
         ref.read(_searchNotifier).search(query);
       });
     });
@@ -83,7 +90,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     // 添加到搜索历史（本地展示 + 持久化）
     setState(() {
       _submittedKeyword = trimmed;
-      _genreFilter = null;
+      _resetResultsView();
       _searchHistory.remove(trimmed);
       _searchHistory.insert(0, trimmed);
       if (_searchHistory.length > 10) {
@@ -94,6 +101,34 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     ref.read(_searchNotifier).search(trimmed);
   }
+
+  void _resetResultsView() {
+    _genreFilter = null;
+    _selection = null;
+    _queryRevision++;
+  }
+
+  void _setGenreFilter(String? genre) {
+    final selectedId = _selectedId;
+    setState(() {
+      _genreFilter = genre;
+      if (selectedId != null &&
+          !ref
+              .read(_search)
+              .results
+              .any(
+                (video) => video.id == selectedId && _hasGenre(video, genre),
+              )) {
+        _selection = null;
+      }
+    });
+  }
+
+  bool _hasGenre(VideoModel video, String? genre) =>
+      genre == null ||
+      (video.genre ?? '')
+          .split(RegExp(r'[,，/、|]'))
+          .any((part) => part.trim() == genre);
 
   /// 从结果的 genre 字段提取筛选项（去重，保序，最多 10 个）
   List<String> _extractGenres(List<VideoModel> results) {
@@ -123,14 +158,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         _genreFilter == null
             ? searchState.results
             : searchState.results
-                .where(
-                  (v) =>
-                      v.genre != null &&
-                      v.genre!
-                          .split(RegExp(r'[,，/、|]'))
-                          .map((part) => part.trim())
-                          .contains(_genreFilter),
-                )
+                .where((video) => _hasGenre(video, _genreFilter))
                 .toList();
 
     return Scaffold(
@@ -211,9 +239,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                         label: const Text('全部'),
                                         selected: _genreFilter == null,
                                         onSelected:
-                                            (_) => setState(
-                                              () => _genreFilter = null,
-                                            ),
+                                            (_) => _setGenreFilter(null),
                                       ),
                                     ),
                                     for (final genre in genres)
@@ -232,12 +258,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                           label: Text(genre),
                                           selected: _genreFilter == genre,
                                           onSelected:
-                                              (_) => setState(
-                                                () =>
-                                                    _genreFilter =
-                                                        _genreFilter == genre
-                                                            ? null
-                                                            : genre,
+                                              (selected) => _setGenreFilter(
+                                                selected ? genre : null,
                                               ),
                                         ),
                                       ),
@@ -272,31 +294,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   searchState.isLoading && searchState.results.isEmpty
                       ? const Center(child: CircularProgressIndicator())
                       : searchState.results.isNotEmpty
-                      ? NotificationListener<ScrollNotification>(
-                        onNotification: (notification) {
-                          if (notification.metrics.extentAfter < 400 &&
-                              !searchState.isLoading &&
-                              searchState.error == null &&
-                              searchState.hasMore &&
-                              searchState.keyword.isNotEmpty) {
-                            ref.read(_searchNotifier).loadMore();
-                          }
-                          return false;
-                        },
-                        child:
-                            (filtered.isEmpty && _genreFilter != null)
-                                ? Center(
-                                  child: Text(
-                                    '该筛选下暂无结果',
-                                    style: TextStyle(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                )
-                                : _showAsGrid
-                                ? _buildPosterGrid(context, filtered)
-                                : _buildResultList(context, filtered),
-                      )
+                      ? _buildResults(filtered, searchState)
                       : searchState.error != null
                       ? _buildError(context, searchState.error!)
                       : searchState.keyword.isNotEmpty
@@ -318,6 +316,82 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   // ---------- 结果视图 ----------
+
+  Widget _buildResults(List<VideoModel> results, SearchState state) {
+    final selected =
+        results.where((video) => video.id == _selectedId).firstOrNull;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showPreview = constraints.maxWidth >= 1120;
+        final list = NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification.depth == 0 &&
+                notification.metrics.axis == Axis.vertical &&
+                notification.metrics.extentAfter < 400 &&
+                !state.isLoading &&
+                state.error == null &&
+                state.hasMore &&
+                state.keyword.isNotEmpty) {
+              ref.read(_searchNotifier).loadMore();
+            }
+            return false;
+          },
+          child:
+              results.isEmpty
+                  ? Center(
+                    child: Text(
+                      '该筛选下暂无结果',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                  : _showAsGrid
+                  ? _buildPosterGrid(context, results, showPreview: showPreview)
+                  : _buildResultList(
+                    context,
+                    results,
+                    showPreview: showPreview,
+                  ),
+        );
+        return Row(
+          children: [
+            Expanded(flex: 46, child: list),
+            if (showPreview) ...[
+              const VerticalDivider(width: 1),
+              Expanded(
+                flex: 54,
+                child: SearchResultPreview(
+                  key: ValueKey(selected?.id),
+                  result: selected,
+                  scraper: _selection?.scraper,
+                  onOpenDetails:
+                      selected == null ? null : () => _openDetails(selected),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  void _openResult(VideoModel video, {required bool showPreview}) {
+    if (showPreview) {
+      setState(() {
+        _selection = (id: video.id, scraper: ref.read(currentScraperProvider));
+      });
+    } else {
+      _openDetails(video);
+    }
+  }
+
+  void _openDetails(VideoModel video, {bool play = false}) {
+    final path = '/detail/${Uri.encodeComponent(video.id)}';
+    final query =
+        _isSourceRecovery ? '?chooseEpisode=1' : (play ? '?play=1' : '');
+    context.push('$path$query');
+  }
 
   Widget _buildNoResults(BuildContext context, String keyword) {
     return Center(
@@ -341,11 +415,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildPosterGrid(BuildContext context, List<VideoModel> results) {
+  Widget _buildPosterGrid(
+    BuildContext context,
+    List<VideoModel> results, {
+    required bool showPreview,
+  }) {
     final active = ref.watch(activeSourceConfigProvider);
     return LayoutBuilder(
       builder:
           (context, constraints) => GridView.builder(
+            key: PageStorageKey(('search-grid', _queryRevision)),
+            primary: false,
             padding: const EdgeInsets.all(16),
             gridDelegate: posterGridDelegate(
               context,
@@ -356,14 +436,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             itemCount: results.length,
             itemBuilder: (context, index) {
               final video = results[index];
-              final detail = '/detail/${Uri.encodeComponent(video.id)}';
               return PosterCard(
+                key: ValueKey((video.id, index)),
                 video: video,
                 showSource: isFromOtherSource(video, active),
-                onTap: () => context.push(detail),
+                previewsOnEnter: showPreview,
+                selected: showPreview && _selectedId == video.id,
+                onTap: () => _openResult(video, showPreview: showPreview),
                 onPlay:
-                    widget.initialKeyword == null
-                        ? () => context.push('$detail?play=1')
+                    !_isSourceRecovery
+                        ? () => _openDetails(video, play: true)
                         : null,
               );
             },
@@ -371,110 +453,124 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildResultList(BuildContext context, List<VideoModel> results) {
+  Widget _buildResultList(
+    BuildContext context,
+    List<VideoModel> results, {
+    required bool showPreview,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final active = ref.watch(activeSourceConfigProvider);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 860),
         child: ListView.separated(
+          key: PageStorageKey(('search-list', _queryRevision)),
+          primary: false,
           padding: const EdgeInsets.all(16),
           itemCount: results.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             final video = results[index];
             final cover = video.cover;
+            final selected = showPreview && _selectedId == video.id;
             return Card(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(6),
-                onTap:
-                    () => context.push(
-                      '/detail/${Uri.encodeComponent(video.id)}',
-                    ),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 72,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child:
-                            cover != null && cover.isNotEmpty
-                                ? CachedNetworkImage(
-                                  imageUrl:
-                                      cover.startsWith('http')
-                                          ? cover
-                                          : 'https://yhdm.me$cover',
-                                  fit: BoxFit.cover,
-                                  errorWidget:
-                                      (context, url, error) => Icon(
-                                        Icons.movie_outlined,
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                )
-                                : Icon(
-                                  Icons.movie_outlined,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              video.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                            if (video.year != null ||
-                                video.genre != null ||
-                                (video.source != null &&
-                                    isFromOtherSource(video, active)))
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  [
-                                    if (isFromOtherSource(video, active))
-                                      video.source,
-                                    video.year,
-                                    video.genre,
-                                  ].whereType<String>().join(' · '),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12,
+              color: selected ? colorScheme.primaryContainer : null,
+              child: Semantics(
+                selected: showPreview ? selected : null,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => _openResult(video, showPreview: showPreview),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 72,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child:
+                              cover != null && cover.isNotEmpty
+                                  ? CachedNetworkImage(
+                                    imageUrl:
+                                        cover.startsWith('http')
+                                            ? cover
+                                            : 'https://yhdm.me$cover',
+                                    fit: BoxFit.cover,
+                                    errorWidget:
+                                        (context, url, error) => Icon(
+                                          Icons.movie_outlined,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                  )
+                                  : Icon(
+                                    Icons.movie_outlined,
                                     color: colorScheme.onSurfaceVariant,
                                   ),
-                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                video.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
                               ),
-                            if (video.description != null &&
-                                video.description!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  video.description!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    height: 1.4,
-                                    color: colorScheme.onSurfaceVariant
-                                        .withValues(alpha: 0.7),
+                              if (video.year != null ||
+                                  video.genre != null ||
+                                  (video.source != null &&
+                                      isFromOtherSource(video, active)))
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    [
+                                      if (isFromOtherSource(video, active))
+                                        video.source,
+                                      video.year,
+                                      video.genre,
+                                    ].whereType<String>().join(' · '),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
+                              if (video.description != null &&
+                                  video.description!.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    video.description!,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      height: 1.4,
+                                      color: colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        if (showPreview && !_isSourceRecovery)
+                          IconButton(
+                            tooltip: '播放 ${video.title}',
+                            onPressed: () => _openDetails(video, play: true),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -287,6 +287,7 @@ void main() {
     await tester.tap(find.text('来自 360zy'));
     await tester.pumpAndSettle();
     expect(find.textContaining('/detail/'), findsOneWidget);
+    expect(find.textContaining('chooseEpisode=1'), findsOneWidget);
     expect(find.textContaining('play=1'), findsNothing);
     expect(DatabaseService().getHistory().single.toJson(), saved.toJson());
   });

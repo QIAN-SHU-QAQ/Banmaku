@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:nova_play/core/config/theme.dart';
 import 'package:nova_play/features/detail/detail_screen.dart';
 import 'package:nova_play/features/download/download_screen.dart';
 import 'package:nova_play/features/favorites/favorites_screen.dart';
 import 'package:nova_play/features/settings/settings_screen.dart';
 import 'package:nova_play/features/search/search_screen.dart';
 import 'package:nova_play/models/bangumi_info.dart';
+import 'package:nova_play/models/history_item.dart';
 import 'package:nova_play/models/video_model.dart';
 import 'package:nova_play/providers/bangumi_provider.dart';
 import 'package:nova_play/services/bangumi_api.dart';
@@ -26,6 +31,16 @@ class _GenreScraper extends FakeScraper {
     VideoModel(id: 'one', title: '科幻片', genre: ' 动画 / 科幻 '),
     VideoModel(id: 'two', title: '剧情片', genre: '剧情'),
   ];
+}
+
+class _RetryDetailScraper extends FakeScraper {
+  int requests = 0;
+
+  @override
+  Future<VideoModel> getDetail(String id) async {
+    if (++requests == 1) throw StateError('片源暂不可用');
+    return VideoModel(id: id, title: '重试后的作品');
+  }
 }
 
 void main() {
@@ -154,6 +169,259 @@ void main() {
     expect(resumed, isTrue);
     expect(removed, isTrue);
     expect(tester.takeException(), isNull);
+  });
+
+  for (final size in [const Size(616, 600), const Size(1120, 720)]) {
+    testWidgets('detail keeps selection visible at ${size.width}', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final bangumi = Completer<BangumiLookupResult>();
+      final title = '同名作品${'很长的片名' * 14}';
+      final description = '很长的简介' * 200;
+      final seasons = [
+        for (final (id, year, source) in [
+          ('season-one', '2023', 'LziApi'),
+          ('season-two', '2025', '360zy'),
+        ])
+          VideoModel(
+            id: id,
+            title: title,
+            year: year,
+            source: source,
+            rating: 8.4,
+            description: description,
+            episodes: [
+              for (var index = 1; index <= 24; index++)
+                EpisodeModel(
+                  id: 'episode-$index',
+                  title: '第 $index 集 · 起点',
+                  url: 'episode-$index',
+                ),
+            ],
+          ),
+      ];
+
+      for (final season in seasons) {
+        await tester.pumpWidget(
+          ProviderScope(
+            key: ValueKey(season.id),
+            overrides: [
+              currentScraperProvider.overrideWithValue(FakeScraper()),
+              videoDetailProvider(
+                season.id,
+              ).overrideWith((ref) async => season),
+              bangumiInfoProvider(
+                BangumiQuery(videoId: season.id, title: season.title),
+              ).overrideWith((ref) => bangumi.future),
+            ],
+            child: MaterialApp(
+              theme: size.width == 616 ? AppTheme.dark : AppTheme.light,
+              builder:
+                  (context, child) => MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      textScaler: TextScaler.linear(
+                        size.width == 616 ? 1.6 : 1,
+                      ),
+                    ),
+                    child: child!,
+                  ),
+              home: DetailScreen(id: season.id),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.text(title).hitTestable(), findsOneWidget);
+        expect(find.text(season.year!).hitTestable(), findsOneWidget);
+        expect(find.text('片源：${season.source}').hitTestable(), findsOneWidget);
+        expect(find.text('共 24 集').hitTestable(), findsOneWidget);
+        expect(find.byIcon(Icons.movie_outlined).hitTestable(), findsOneWidget);
+        expect(find.textContaining('选集').first.hitTestable(), findsOneWidget);
+        expect(find.text('第 1 集 · 起点').hitTestable(), findsOneWidget);
+        expect(find.byTooltip('下载本集').first.hitTestable(), findsOneWidget);
+        expect(find.text('评分 8.4').hitTestable(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+
+      bangumi.complete(const BangumiLookupResult.unavailable());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('下载本集').first);
+      await tester.pumpAndSettle();
+      expect(find.text('正在解析下载地址...'), findsOneWidget);
+      final descriptionText = find.text(description);
+      expect(tester.widget<Text>(descriptionText).maxLines, 3);
+      final expand = find.text('展开简介');
+      await tester.ensureVisible(expand);
+      await tester.tap(expand);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(descriptionText).maxLines, isNull);
+      final collapse = find.text('收起简介');
+      await tester.ensureVisible(collapse);
+      await tester.tap(collapse);
+      await tester.pumpAndSettle();
+      final match = find.text('手动匹配');
+      await tester.ensureVisible(match);
+      expect(match.hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+    'detail offers original-source resume only for matching history',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final db = DatabaseService()..resetForTest();
+      await db.init();
+      addTearDown(db.resetForTest);
+      final original = VideoModel(
+        id: '42',
+        title: '同名作品',
+        source: 'LziApi',
+        episodes: [
+          EpisodeModel(
+            id: 'ep1',
+            title: '第 1 集',
+            url: 'original-ep1',
+            playUrl: 'https://original.example/1.mp4',
+          ),
+          EpisodeModel(
+            id: 'ep2',
+            title: '第 2 集',
+            url: 'original-ep2',
+            playUrl: 'https://original.example/2.mp4',
+          ),
+        ],
+      );
+      final other = original.copyWith(id: '360zy:42', source: '360zy');
+      await db.saveHistory(
+        HistoryItem(
+          videoId: db.historyIdForVideo(original),
+          title: original.title,
+          sourceId: original.source,
+          episodes: original.episodes!,
+          episodeIndex: 1,
+          position: const Duration(seconds: 83),
+          watchedAt: DateTime(2026, 11, 19),
+        ),
+      );
+      Map<String, dynamic>? launch;
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', redirect: (_, __) => '/detail/360zy%3A42'),
+          GoRoute(
+            path: '/detail/:id',
+            builder:
+                (_, state) => DetailScreen(id: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/player',
+            builder: (_, state) {
+              launch = state.extra! as Map<String, dynamic>;
+              return const Scaffold(body: Text('播放窗口'));
+            },
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            for (final video in [original, other]) ...[
+              videoDetailProvider(video.id).overrideWith((ref) async => video),
+              bangumiInfoProvider(
+                BangumiQuery(videoId: video.id, title: video.title),
+              ).overrideWith(
+                (ref) async => const BangumiLookupResult.unavailable(),
+              ),
+            ],
+            originalSourceDetailProvider.overrideWithValue((id, source) async {
+              expect(id, db.historyIdForVideo(original));
+              expect(source, 'lziapi');
+              return original.copyWith(
+                episodes: original.episodes!.reversed.toList(),
+              );
+            }),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('继续观看'), findsNothing);
+      expect(find.text('立即播放'), findsOneWidget);
+
+      router.go('/detail/42');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('继续观看'));
+      await tester.pumpAndSettle();
+      expect(launch, containsPair('currentIndex', 0));
+      expect(launch, containsPair('startAt', 83));
+      expect(
+        launch,
+        containsPair('videoUrl', 'https://original.example/2.mp4'),
+      );
+      expect(launch, containsPair('sourceId', 'LziApi'));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('detail keeps favorite and information for an empty source', (
+    tester,
+  ) async {
+    final video = VideoModel(id: 'empty', title: '作品', description: '作品简介');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          videoDetailProvider(video.id).overrideWith((ref) async => video),
+          bangumiInfoProvider(
+            BangumiQuery(videoId: video.id, title: video.title),
+          ).overrideWith(
+            (ref) async => const BangumiLookupResult.unavailable(),
+          ),
+        ],
+        child: const MaterialApp(home: DetailScreen(id: 'empty')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('当前片源暂无剧集').hitTestable(), findsOneWidget);
+    expect(find.text('收藏').hitTestable(), findsOneWidget);
+    expect(find.text('作品简介'), findsOneWidget);
+    expect(find.text('手动匹配'), findsOneWidget);
+  });
+
+  testWidgets('detail retries a failed request shared with search preview', (
+    tester,
+  ) async {
+    final scraper = _RetryDetailScraper();
+    final container = ProviderContainer(
+      overrides: [
+        currentScraperProvider.overrideWithValue(scraper),
+        bangumiInfoProvider(
+          const BangumiQuery(videoId: 'retry', title: '重试后的作品'),
+        ).overrideWith((ref) async => const BangumiLookupResult.noMatch()),
+      ],
+    );
+    addTearDown(container.dispose);
+    final preview = container.listen(
+      sourceVideoDetailProvider((scraper: scraper, id: 'retry')),
+      (_, _) {},
+    );
+    addTearDown(preview.close);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: DetailScreen(id: 'retry')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('加载失败'), findsOneWidget);
+    expect(scraper.requests, 1);
+
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(scraper.requests, 2);
+    expect(find.text('重试后的作品'), findsOneWidget);
+    expect(preview.read().valueOrNull?.title, '重试后的作品');
   });
 
   for (final width in [420.0, 960.0, 1440.0]) {

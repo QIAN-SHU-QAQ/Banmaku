@@ -120,6 +120,33 @@ void main() {
     expect(opens, 1);
   });
 
+  testWidgets('preview card and quick play each have their own Enter action', (
+    tester,
+  ) async {
+    var previews = 0;
+    var plays = 0;
+    await tester.pumpWidget(
+      _posterFrame(
+        child: PosterCard(
+          video: VideoModel(id: 'poster', title: _longTitle),
+          previewsOnEnter: true,
+          onTap: () => previews++,
+          onPlay: () => plays++,
+        ),
+      ),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(previews, 1);
+    expect(plays, 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(previews, 1);
+    expect(plays, 1);
+  });
+
   testWidgets('discovery rows fit the artwork and a scaled caption', (
     tester,
   ) async {
