@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:collection/collection.dart';
 
 import '../../core/utils/play_launcher.dart';
 import '../../models/bangumi_info.dart';
@@ -15,21 +14,36 @@ import '../../providers/scraper_provider.dart';
 import '../../providers/video_provider.dart';
 import '../../services/bangumi_api.dart';
 import '../../services/database_service.dart';
+import '../../shared/widgets/source_picker.dart';
 import 'widgets/bangumi_match_dialog.dart';
 
 class DetailScreen extends ConsumerStatefulWidget {
   final String id;
+  final bool autoplay;
+  final VideoModel? savedVideo;
 
-  const DetailScreen({super.key, required this.id});
+  const DetailScreen({
+    super.key,
+    required this.id,
+    this.autoplay = false,
+    this.savedVideo,
+  });
 
   @override
   ConsumerState<DetailScreen> createState() => _DetailScreenState();
 }
 
 class _DetailScreenState extends ConsumerState<DetailScreen> {
+  bool _autoplayTriggered = false;
+
   @override
   Widget build(BuildContext context) {
-    final videoDetail = ref.watch(videoDetailProvider(widget.id));
+    final saved = widget.savedVideo;
+    final provider =
+        saved == null
+            ? videoDetailProvider(widget.id)
+            : savedVideoDetailProvider(saved);
+    final videoDetail = ref.watch(provider);
 
     return Scaffold(
       appBar: AppBar(
@@ -68,15 +82,41 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed:
-                        () => ref.invalidate(videoDetailProvider(widget.id)),
-                    child: const Text('重试'),
+                  Wrap(
+                    spacing: 12,
+                    children: [
+                      FilledButton(
+                        onPressed: () => ref.invalidate(provider),
+                        child: const Text('重试'),
+                      ),
+                      if (saved != null)
+                        OutlinedButton(
+                          onPressed:
+                              () => pickSourceForSearch(
+                                context,
+                                ref,
+                                saved.title,
+                              ),
+                          child: const Text('切换片源'),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
-        data: (video) => _buildThreeColumns(video),
+        data: (video) {
+          if (widget.autoplay &&
+              !_autoplayTriggered &&
+              video.episodes?.isNotEmpty == true) {
+            _autoplayTriggered = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && ModalRoute.of(context)?.isCurrent != false) {
+                _playEpisode(video, 0);
+              }
+            });
+          }
+          return _buildThreeColumns(video);
+        },
       ),
     );
   }
@@ -239,9 +279,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
   Widget _buildPosterColumn(VideoModel video) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isFavorite = ref
-        .watch(favoritesProvider)
-        .any((v) => v.id == video.id);
+    ref.watch(favoritesProvider);
+    final isFavorite = DatabaseService().favoriteForVideo(video) != null;
     final genres = _splitGenres(video.genre);
 
     return SizedBox(
@@ -363,12 +402,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     // 历史"当前集"：有记录则描边标记
-    final history = ref.watch(historyProvider);
-    final watchedIndex =
-        history
-            .where((h) => h.videoId == video.id)
-            .map((h) => h.episodeIndex)
-            .firstOrNull;
+    ref.watch(historyProvider);
+    final watchedIndex = DatabaseService().historyForVideo(video)?.episodeIndex;
     final episodes = video.episodes ?? const <EpisodeModel>[];
 
     return SingleChildScrollView(
@@ -408,6 +443,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                 ),
             ],
           ),
+          if (video.source?.isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '片源：${video.source}',
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              ),
+            ),
           const SizedBox(height: 16),
 
           // 简介
@@ -778,7 +821,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   void _toggleFavorite(VideoModel video) {
     ref.read(favoritesProvider.notifier).toggle(video).then((_) {
       if (!mounted) return;
-      final isFav = ref.read(favoritesProvider).any((v) => v.id == video.id);
+      final isFav = DatabaseService().favoriteForVideo(video) != null;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(isFav ? '已加入收藏' : '已取消收藏')));
@@ -803,7 +846,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               )
               .toList(),
       currentIndex: index,
-      videoId: video.id,
+      videoId: DatabaseService().historyIdForVideo(video),
       videoTitle: video.title,
       cover: video.cover,
       sourceId: video.source,

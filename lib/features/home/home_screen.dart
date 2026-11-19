@@ -10,6 +10,8 @@ import '../../providers/home_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/scraper_provider.dart';
 import '../../providers/video_provider.dart';
+import '../../shared/widgets/poster_card.dart';
+import '../../shared/widgets/source_picker.dart';
 import 'widgets/video_card.dart';
 import 'widgets/category_tabs.dart';
 
@@ -23,17 +25,24 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _scrollController = ScrollController();
 
-  static const _gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-    maxCrossAxisExtent: 180,
-    childAspectRatio: 0.57,
-    crossAxisSpacing: 16,
-    mainAxisSpacing: 24,
-  );
-
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    ref.listenManual(categoriesProvider, (_, next) {
+      final choices = next.asData?.value;
+      if (choices == null) return;
+      final selected = ref.read(selectedCategoryProvider);
+      if (selected == '全部' || choices.contains(selected)) return;
+      Future.microtask(() {
+        if (!mounted ||
+            ref.read(selectedCategoryProvider) != selected ||
+            !identical(ref.read(categoriesProvider), next)) {
+          return;
+        }
+        ref.read(selectedCategoryProvider.notifier).state = '全部';
+      });
+    });
   }
 
   @override
@@ -64,6 +73,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final selectedCategory = ref.watch(selectedCategoryProvider);
+    final categories = ref.watch(categoriesProvider);
     final videoState = ref.watch(videoListProvider);
     final history = ref.watch(historyProvider);
     return Scaffold(
@@ -79,25 +89,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(28, 8, 28, 24),
-                child: ref
-                    .watch(categoriesProvider)
-                    .maybeWhen(
-                      data:
-                          (categories) => CategoryTabs(
-                            categories:
-                                categories.isEmpty ? const ['全部'] : categories,
-                            selectedCategory: selectedCategory,
-                            onCategorySelected: (category) {
-                              ref
-                                  .read(selectedCategoryProvider.notifier)
-                                  .state = category;
-                              if (_scrollController.hasClients) {
-                                _scrollController.jumpTo(0);
-                              }
-                            },
-                          ),
-                      orElse: () => const SizedBox(height: 44),
-                    ),
+                child: categories.maybeWhen(
+                  data:
+                      (categories) => CategoryTabs(
+                        categories:
+                            categories.isEmpty ? const ['全部'] : categories,
+                        selectedCategory: selectedCategory,
+                        onCategorySelected: (category) {
+                          ref.read(selectedCategoryProvider.notifier).state =
+                              category;
+                          if (_scrollController.hasClients) {
+                            _scrollController.jumpTo(0);
+                          }
+                        },
+                      ),
+                  orElse: () => const SizedBox(height: 44),
+                ),
               ),
             ),
             if (selectedCategory == '全部')
@@ -116,44 +123,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 26, 28, 16),
       child: LayoutBuilder(
-        builder:
-            (context, constraints) => Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '发现',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
+        builder: (context, constraints) {
+          final heading = Text(
+            '发现',
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
+          );
+          final actions = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: (constraints.maxWidth * 0.27).clamp(128.0, 234.0),
+                child: OutlinedButton.icon(
+                  onPressed: () => context.push('/search'),
+                  icon: const Icon(Icons.search, size: 18),
+                  label: const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('搜索作品'),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colors.onSurface,
+                    side: BorderSide(color: colors.outlineVariant),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
                 ),
-                SizedBox(
-                  width: (constraints.maxWidth * 0.45).clamp(140.0, 240.0),
-                  height: 38,
-                  child: OutlinedButton.icon(
-                    onPressed: () => context.push('/search'),
-                    icon: const Icon(Icons.search, size: 18),
-                    label: const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('搜索作品'),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colors.onSurfaceVariant,
-                      side: BorderSide(color: colors.outlineVariant),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: '刷新',
-                  onPressed: _refresh,
-                  icon: const Icon(Icons.refresh, size: 20),
-                ),
-              ],
-            ),
+              ),
+              const SourcePicker(),
+              IconButton(
+                tooltip: '刷新',
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh, size: 20),
+              ),
+            ],
+          );
+          return constraints.maxWidth < 540
+              ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [heading, const SizedBox(height: 12), actions],
+              )
+              : Row(children: [Expanded(child: heading), actions]);
+        },
       ),
     );
   }
@@ -192,13 +206,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   (context, index) => _ContinueCard(
                     item: history[index],
                     onTap:
-                        () => launchHistoryResume(
+                        () => resumeFromOriginalSource(
                           context,
+                          ref,
                           history[index],
-                          fetchDetail:
-                              () => ref
-                                  .read(currentScraperProvider)
-                                  .getDetail(history[index].videoId),
                         ),
                   ),
             ),
@@ -286,20 +297,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _grid(List<VideoModel> videos) {
+    final active = ref.watch(activeSourceConfigProvider);
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 28),
-      sliver: SliverGrid(
-        gridDelegate: _gridDelegate,
-        delegate: SliverChildBuilderDelegate(
-          (context, index) => VideoCard(
-            video: videos[index],
-            onTap:
-                () => context.push(
-                  '/detail/${Uri.encodeComponent(videos[index].id)}',
-                ),
-          ),
-          childCount: videos.length,
-        ),
+      sliver: SliverLayoutBuilder(
+        builder:
+            (context, constraints) => SliverGrid(
+              gridDelegate: posterGridDelegate(
+                context,
+                constraints.crossAxisExtent,
+                maxTileWidth: 180,
+                spacing: 16,
+              ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final video = videos[index];
+                final detail = '/detail/${Uri.encodeComponent(video.id)}';
+                return VideoCard(
+                  video: video,
+                  showSource: isFromOtherSource(video, active),
+                  onTap: () => context.push(detail),
+                  onPlay: () => context.push('$detail?play=1'),
+                );
+              }, childCount: videos.length),
+            ),
       ),
     );
   }
@@ -325,7 +345,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
               if (onRetry != null) ...[
                 const SizedBox(height: 16),
-                OutlinedButton(onPressed: onRetry, child: const Text('重试')),
+                Wrap(
+                  spacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    OutlinedButton(onPressed: onRetry, child: const Text('重试')),
+                    if (detail != null) const SourcePicker(label: '切换片源'),
+                  ],
+                ),
               ],
             ],
           ),
@@ -350,7 +377,7 @@ class _ContinueCard extends StatelessWidget {
     return SizedBox(
       width: 304,
       child: Material(
-        color: colors.surfaceContainerLow,
+        color: colors.surfaceContainer,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(6),
           side: BorderSide(color: colors.outlineVariant),

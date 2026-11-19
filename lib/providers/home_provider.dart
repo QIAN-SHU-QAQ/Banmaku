@@ -57,9 +57,11 @@ class CategoryFeedNotifier extends StateNotifier<CategoryFeedState> {
   }
 
   final BaseScraper _scraper;
+  int _requestId = 0;
 
   Future<void> loadMore() async {
     if (!mounted || state.isLoading || !state.hasMore) return;
+    final requestId = _requestId;
     final requestedPage = state.page;
     state = state.copyWith(isLoading: true, clearError: true);
 
@@ -68,7 +70,7 @@ class CategoryFeedNotifier extends StateNotifier<CategoryFeedState> {
         state.category,
         page: requestedPage,
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       state = state.copyWith(
         videos: [...state.videos, ...videos],
         isLoading: false,
@@ -76,7 +78,7 @@ class CategoryFeedNotifier extends StateNotifier<CategoryFeedState> {
         page: requestedPage + 1,
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -84,6 +86,7 @@ class CategoryFeedNotifier extends StateNotifier<CategoryFeedState> {
   /// 刷新：丢弃已有结果，从第一页重新加载。
   Future<void> refresh() async {
     if (!mounted) return;
+    _requestId++;
     state = CategoryFeedState(category: state.category);
     await loadMore();
   }

@@ -1,92 +1,216 @@
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/video_model.dart';
 
-/// A bounded grid tile: cover, two title lines and a metadata line.
-/// Use a grid childAspectRatio near 0.57 so the image remains portrait shaped.
-class PosterCard extends StatelessWidget {
+/// Sizes rows from the available width after horizontal grid padding.
+SliverGridDelegateWithFixedCrossAxisCount posterGridDelegate(
+  BuildContext context,
+  double width, {
+  required double maxTileWidth,
+  required double spacing,
+}) {
+  final count = math.max(
+    1,
+    ((width + spacing) / (maxTileWidth + spacing)).ceil(),
+  );
+  final tileWidth = (width - (count - 1) * spacing) / count;
+  return SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: count,
+    crossAxisSpacing: spacing,
+    mainAxisSpacing: spacing,
+    mainAxisExtent: tileWidth * 1.5 + PosterCard.captionHeight(context),
+  );
+}
+
+/// A portrait cover with two title lines and one metadata line.
+class PosterCard extends StatefulWidget {
+  const PosterCard({
+    super.key,
+    required this.video,
+    this.onTap,
+    this.onPlay,
+    this.showSource = false,
+  });
+
   final VideoModel video;
   final VoidCallback? onTap;
+  final VoidCallback? onPlay;
+  final bool showSource;
 
-  const PosterCard({super.key, required this.video, this.onTap});
+  static const _titleSize = 13.0;
+  static const _metadataSize = 11.0;
+  static const _lineHeight = 1.35;
+  static const _titleTop = 7.0;
+  static const _metadataTop = 3.0;
+  static const _captionBottom = 4.0;
+
+  /// Use this with the actual tile width to size a discovery grid row.
+  static double captionHeight(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    return _titleTop +
+        _titleHeight(scaler) +
+        _metadataTop +
+        _metadataHeight(scaler) +
+        _captionBottom;
+  }
+
+  static double _titleHeight(TextScaler scaler) =>
+      (scaler.scale(_titleSize) * _lineHeight * 2).ceilToDouble();
+
+  static double _metadataHeight(TextScaler scaler) =>
+      (scaler.scale(_metadataSize) * _lineHeight).ceilToDouble();
+
+  @override
+  State<PosterCard> createState() => _PosterCardState();
+}
+
+class _PosterCardState extends State<PosterCard> {
+  static final _radius = BorderRadius.circular(8);
+  bool _hovered = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final scaler = MediaQuery.textScalerOf(context);
+    final video = widget.video;
     final metadata = [
-      video.year,
-      video.genre,
-    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ');
-    final cover = video.cover;
-    return Material(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(6),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        hoverColor: colors.primary.withValues(alpha: 0.08),
-        focusColor: colors.primary.withValues(alpha: 0.16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child:
-                    cover != null && cover.isNotEmpty
-                        ? CachedNetworkImage(
-                          imageUrl:
-                              cover.startsWith('http')
-                                  ? cover
-                                  : 'https://yhdm.me$cover',
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => _placeholder(context),
-                          errorWidget: (_, __, ___) => _placeholder(context),
-                        )
-                        : _placeholder(context),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(3, 8, 3, 0),
-              child: SizedBox(
-                height: 36,
-                child: Text(
-                  video.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.35,
-                    fontWeight: FontWeight.w500,
-                    color: colors.onSurface,
+          if (widget.showSource) video.source,
+          video.year,
+          video.genre,
+        ]
+        .whereType<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .join(' · ');
+    final primaryAction = widget.onPlay ?? widget.onTap;
+
+    return CallbackShortcuts(
+      bindings: {
+        if (primaryAction != null) ...{
+          const SingleActivator(LogicalKeyboardKey.enter): primaryAction,
+          const SingleActivator(LogicalKeyboardKey.numpadEnter): primaryAction,
+        },
+      },
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: _radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: widget.onTap ?? widget.onPlay,
+          onHover: (value) => setState(() => _hovered = value),
+          onFocusChange: (value) => setState(() => _focused = value),
+          borderRadius: _radius,
+          hoverColor: colors.onSurface.withValues(alpha: 0.05),
+          focusColor: colors.primary.withValues(alpha: 0.09),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: AspectRatio(
+                    aspectRatio: 2 / 3,
+                    child: ClipRRect(
+                      borderRadius: _radius,
+                      child: Container(
+                        foregroundDecoration: BoxDecoration(
+                          borderRadius: _radius,
+                          border: Border.all(
+                            color:
+                                _focused
+                                    ? colors.primary
+                                    : colors.outlineVariant,
+                            width: _focused ? 2 : 1,
+                          ),
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _cover(colors, video.cover),
+                            if ((_hovered || _focused) && primaryAction != null)
+                              Center(
+                                child: Focus(
+                                  canRequestFocus: false,
+                                  descendantsAreFocusable: false,
+                                  child: ExcludeSemantics(
+                                    excluding: widget.onPlay == null,
+                                    child: IconButton.filled(
+                                      onPressed: primaryAction,
+                                      tooltip:
+                                          widget.onPlay == null ? '打开详情' : '播放',
+                                      icon: Icon(
+                                        widget.onPlay == null
+                                            ? Icons.arrow_outward_rounded
+                                            : Icons.play_arrow_rounded,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(3, 3, 3, 4),
-              child: Text(
-                metadata.isEmpty ? (video.description ?? '') : metadata,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  height: 1.4,
-                  color: colors.onSurfaceVariant,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  2,
+                  PosterCard._titleTop,
+                  2,
+                  0,
+                ),
+                child: SizedBox(
+                  height: PosterCard._titleHeight(scaler),
+                  child: Text(
+                    video.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: PosterCard._titleSize,
+                      height: PosterCard._lineHeight,
+                      fontWeight: FontWeight.w600,
+                      color: colors.onSurface,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  2,
+                  PosterCard._metadataTop,
+                  2,
+                  PosterCard._captionBottom,
+                ),
+                child: SizedBox(
+                  height: PosterCard._metadataHeight(scaler),
+                  child: Text(
+                    metadata.isEmpty ? (video.description ?? '') : metadata,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: PosterCard._metadataSize,
+                      height: PosterCard._lineHeight,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _placeholder(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return ColoredBox(
+  Widget _cover(ColorScheme colors, String? cover) {
+    final placeholder = ColoredBox(
       color: colors.surfaceContainerHigh,
       child: Center(
         child: Icon(
@@ -95,6 +219,14 @@ class PosterCard extends StatelessWidget {
           color: colors.onSurfaceVariant,
         ),
       ),
+    );
+    if (cover == null || cover.isEmpty) return placeholder;
+
+    return CachedNetworkImage(
+      imageUrl: cover.startsWith('http') ? cover : 'https://yhdm.me$cover',
+      fit: BoxFit.cover,
+      placeholder: (_, __) => placeholder,
+      errorWidget: (_, __, ___) => placeholder,
     );
   }
 }

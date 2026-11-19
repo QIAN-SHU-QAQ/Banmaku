@@ -19,22 +19,34 @@ class MainScaffold extends StatelessWidget {
             SizedBox(
               width: 184,
               child: ColoredBox(
-                color: colors.surfaceContainerLow,
+                color:
+                    colors.brightness == Brightness.dark
+                        ? colors.surfaceContainerLowest
+                        : colors.surfaceContainerLow,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 29, 8, 31),
+                        padding: const EdgeInsets.fromLTRB(8, 20, 8, 22),
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.play_arrow_rounded,
-                              color: colors.primary,
-                              size: 26,
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: colors.primary.withValues(alpha: 0.13),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(5),
+                                child: Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: colors.primary,
+                                  size: 22,
+                                ),
+                              ),
                             ),
-                            const SizedBox(width: 7),
+                            const SizedBox(width: 9),
                             Expanded(
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
@@ -58,28 +70,28 @@ class MainScaffold extends StatelessWidget {
                         label: '搜索',
                         onTap: () => context.push('/search'),
                       ),
-                      const SizedBox(height: 25),
+                      const SizedBox(height: 16),
                       _NavigationItem(
                         icon: Icons.grid_view_outlined,
                         label: '发现',
                         selected: current == 0,
                         onTap: () => go(0),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
                       _NavigationItem(
                         icon: Icons.favorite_border_rounded,
                         label: '收藏',
                         selected: current == 1,
                         onTap: () => go(1),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
                       _NavigationItem(
                         icon: Icons.history_rounded,
                         label: '历史',
                         selected: current == 3,
                         onTap: () => go(3),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
                       _NavigationItem(
                         icon: Icons.download_outlined,
                         label: '下载',
@@ -88,14 +100,14 @@ class MainScaffold extends StatelessWidget {
                       ),
                       const Spacer(),
                       Divider(color: colors.outlineVariant),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       _NavigationItem(
                         icon: Icons.settings_outlined,
                         label: '设置',
                         selected: current == 4,
                         onTap: () => go(4),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 12),
                     ],
                   ),
                 ),
@@ -125,36 +137,52 @@ class _NavigationItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final borderRadius = BorderRadius.circular(8);
     return Semantics(
       selected: selected,
       button: true,
       child: Material(
-        color: selected ? colors.primaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
+        color:
+            selected
+                ? colors.primary.withValues(alpha: 0.13)
+                : Colors.transparent,
+        borderRadius: borderRadius,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: borderRadius,
           mouseCursor: SystemMouseCursors.click,
+          hoverColor: colors.onSurface.withValues(alpha: 0.06),
+          focusColor: colors.primary.withValues(alpha: 0.18),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
             child: Row(
               children: [
+                Container(
+                  width: 2,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: selected ? colors.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Icon(
                   icon,
                   size: 19,
-                  color:
-                      selected
-                          ? colors.onPrimaryContainer
-                          : colors.onSurfaceVariant,
+                  color: selected ? colors.primary : colors.onSurfaceVariant,
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color:
-                        selected ? colors.onPrimaryContainer : colors.onSurface,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color:
+                          selected ? colors.primary : colors.onSurfaceVariant,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
                   ),
                 ),
               ],

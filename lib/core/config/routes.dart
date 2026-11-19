@@ -8,6 +8,7 @@ import '../../features/download/download_screen.dart';
 import '../../features/favorites/favorites_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../models/video_model.dart';
 import '../../shared/widgets/main_scaffold.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -64,13 +65,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       // 全屏搜索页：移出 shell，push 覆盖整个窗口
       GoRoute(
         path: '/search',
-        builder: (context, state) => const SearchScreen(),
+        builder:
+            (context, state) =>
+                SearchScreen(initialKeyword: state.uri.queryParameters['q']),
       ),
       GoRoute(
         path: '/detail/:id',
         builder: (context, state) {
           final id = state.pathParameters['id']!;
-          return DetailScreen(id: id);
+          final saved = state.extra;
+          return DetailScreen(
+            id: id,
+            autoplay: state.uri.queryParameters['play'] == '1',
+            savedVideo: saved is VideoModel ? saved : null,
+          );
         },
       ),
       GoRoute(

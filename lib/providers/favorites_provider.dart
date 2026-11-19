@@ -9,13 +9,13 @@ class FavoritesNotifier extends StateNotifier<List<VideoModel>> {
   /// 已收藏则取消，否则置顶添加
   Future<void> toggle(VideoModel video) async {
     final db = DatabaseService();
-    if (state.any((v) => v.id == video.id)) {
-      await db.removeFavorite(video.id);
-      state = state.where((v) => v.id != video.id).toList();
+    final saved = db.favoriteForVideo(video);
+    if (saved != null) {
+      await db.removeFavorite(saved.id);
     } else {
       await db.addFavorite(video);
-      state = [video, ...state];
     }
+    if (mounted) state = db.getFavorites();
   }
 }
 

@@ -10,6 +10,8 @@ import 'package:nova_play/models/bangumi_info.dart';
 import 'package:nova_play/models/video_model.dart';
 import 'package:nova_play/providers/bangumi_provider.dart';
 import 'package:nova_play/services/bangumi_api.dart';
+import 'package:nova_play/services/database_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nova_play/providers/favorites_provider.dart';
 import 'package:nova_play/providers/theme_provider.dart';
 import 'package:nova_play/providers/video_provider.dart';
@@ -84,6 +86,10 @@ void main() {
   testWidgets('favorite remove button confirms before removing', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({});
+    final db = DatabaseService()..resetForTest();
+    await db.init();
+    addTearDown(db.resetForTest);
     final container = ProviderContainer();
     addTearDown(container.dispose);
     final video = VideoModel(id: 'favorite', title: '收藏测试');

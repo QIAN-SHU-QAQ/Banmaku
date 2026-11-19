@@ -3,11 +3,16 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/history_item.dart';
 import '../../models/video_model.dart';
+import '../../providers/scraper_provider.dart';
+import '../../services/database_service.dart';
 import '../../services/prefs_bridge.dart';
+import '../../services/scraper/lziapi_scraper.dart';
+import '../../shared/widgets/source_picker.dart';
 import 'history_resume.dart';
 
 /// 当前进程是否运行在 `flutter test` 里（测试环境不启动独立进程）。
@@ -65,15 +70,40 @@ Future<void> launchPlayer(
 /// 正在解析续播目标的作品，防止双击重复打开播放器。
 final Set<String> _resuming = <String>{};
 
+Future<void> resumeFromOriginalSource(
+  BuildContext context,
+  WidgetRef ref,
+  HistoryItem item,
+) {
+  return launchHistoryResume(
+    context,
+    item,
+    fetchDetail: () async {
+      final fetch = ref.read(originalSourceDetailProvider);
+      final isMacCms = ref.read(currentScraperProvider) is LziApiScraper;
+      final original = await fetch(
+        item.videoId,
+        DatabaseService().sourceIdForHistory(item),
+      );
+      // A verified source may use a canonical ID and display name that differ
+      // from the saved record. Preserve the record's keys for episode matching.
+      return isMacCms
+          ? original.copyWith(id: item.videoId, source: item.sourceId)
+          : original;
+    },
+    onSwitchSource: () => pickSourceForSearch(context, ref, item.title),
+  );
+}
+
 /// 从历史条目续播（R4）。
 ///
 /// 不直接使用历史快照里的播放地址（可能已过期）：先通过 [fetchDetail]
-/// 刷新作品详情，重新定位剧集与播放地址；刷新失败、身份不符或找不到
-/// 对应集时回退到作品详情页，避免播放错误地址。
+/// 刷新作品详情，重新定位剧集与播放地址；无法定位时等待用户确认。
 Future<void> launchHistoryResume(
   BuildContext context,
   HistoryItem item, {
   Future<VideoModel?> Function()? fetchDetail,
+  Future<void> Function()? onSwitchSource,
 }) async {
   if (_resuming.contains(item.videoId)) return;
   _resuming.add(item.videoId);
@@ -88,8 +118,14 @@ Future<void> launchHistoryResume(
   } catch (_) {
     // 非 GoRouter 环境（部分组件测试）不启用路由守卫。
   }
+  var leftOrigin = false;
+  void noteRouteChange() {
+    if (router?.state.uri.toString() != originUri) leftOrigin = true;
+  }
+
+  router?.routerDelegate.addListener(noteRouteChange);
   bool stillActive() {
-    if (!context.mounted) return false;
+    if (!context.mounted || leftOrigin) return false;
     final currentRouter = router;
     if (currentRouter != null &&
         originUri != null &&
@@ -102,7 +138,45 @@ Future<void> launchHistoryResume(
   try {
     HistoryResumeTarget? target;
     if (fetchDetail != null) {
-      target = await resolveHistoryResumeTarget(item, fetchDetail: fetchDetail);
+      do {
+        target = await resolveHistoryResumeTarget(
+          item,
+          fetchDetail: fetchDetail,
+        );
+        if (!stillActive()) return;
+        if (target != null || onSwitchSource == null) break;
+        if (!context.mounted) return;
+        final action = await showDialog<_ResumeAction>(
+          context: context,
+          builder:
+              (dialogContext) => AlertDialog(
+                title: const Text('无法从原片源续播'),
+                content: Text('无法确认《${item.title}》的原剧集。重试，或换源后重新选择剧集。'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('取消'),
+                  ),
+                  TextButton(
+                    onPressed:
+                        () => Navigator.pop(dialogContext, _ResumeAction.retry),
+                    child: const Text('重试'),
+                  ),
+                  FilledButton(
+                    onPressed:
+                        () => Navigator.pop(
+                          dialogContext,
+                          _ResumeAction.switchSource,
+                        ),
+                    child: const Text('切换片源'),
+                  ),
+                ],
+              ),
+        );
+        if (!stillActive()) return;
+        if (action == _ResumeAction.switchSource) await onSwitchSource();
+        if (action != _ResumeAction.retry) return;
+      } while (true);
     } else if (item.episodes.isNotEmpty) {
       // 没有详情刷新入口时（测试/降级）仍使用快照，保持行为可用。
       final index = item.episodeIndex.clamp(0, item.episodes.length - 1);
@@ -145,11 +219,14 @@ Future<void> launchHistoryResume(
       currentIndex: target.index,
       startAt: item.position.inSeconds,
       videoId: item.videoId,
-      videoTitle: target.videoTitle,
+      videoTitle: item.title,
       cover: target.cover,
       sourceId: target.sourceId ?? item.sourceId,
     );
   } finally {
+    router?.routerDelegate.removeListener(noteRouteChange);
     _resuming.remove(item.videoId);
   }
 }
+
+enum _ResumeAction { retry, switchSource }

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/video_model.dart';
+import '../services/database_service.dart';
 import '../services/scraper/base_scraper.dart';
+import '../services/scraper/source_identity.dart';
 import 'scraper_provider.dart';
 
 /// 首页视频列表状态
@@ -40,6 +42,7 @@ class VideoListState {
 /// 首页视频列表 Notifier
 class VideoListNotifier extends StateNotifier<VideoListState> {
   final BaseScraper _scraper;
+  int _requestId = 0;
 
   VideoListNotifier(this._scraper) : super(VideoListState()) {
     loadVideos();
@@ -47,30 +50,19 @@ class VideoListNotifier extends StateNotifier<VideoListState> {
 
   Future<void> loadVideos() async {
     if (state.isLoading) return;
-
-    state = state.copyWith(isLoading: true, clearError: true);
-
-    try {
-      final videos = await _scraper.getHome(page: 1);
-      state = VideoListState(
-        videos: videos,
-        isLoading: false,
-        hasMore: videos.isNotEmpty,
-        currentPage: 1,
-      );
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-    }
+    await refresh();
   }
 
   Future<void> loadMore() async {
     if (state.isLoading || !state.hasMore) return;
 
-    state = state.copyWith(isLoading: true);
+    final requestId = _requestId;
+    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       final nextPage = state.currentPage + 1;
       final videos = await _scraper.getHome(page: nextPage);
+      if (!mounted || requestId != _requestId) return;
       state = state.copyWith(
         videos: [...state.videos, ...videos],
         isLoading: false,
@@ -78,14 +70,18 @@ class VideoListNotifier extends StateNotifier<VideoListState> {
         currentPage: nextPage,
       );
     } catch (e) {
+      if (!mounted || requestId != _requestId) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
   Future<void> refresh() async {
+    if (!mounted) return;
+    final requestId = ++_requestId;
     state = VideoListState(isLoading: true);
     try {
       final videos = await _scraper.getHome(page: 1);
+      if (!mounted || requestId != _requestId) return;
       state = VideoListState(
         videos: videos,
         isLoading: false,
@@ -93,6 +89,7 @@ class VideoListNotifier extends StateNotifier<VideoListState> {
         currentPage: 1,
       );
     } catch (e) {
+      if (!mounted || requestId != _requestId) return;
       state = VideoListState(isLoading: false, error: e.toString());
     }
   }
@@ -113,6 +110,21 @@ final videoDetailProvider = FutureProvider.family<VideoModel, String>((
   final scraper = ref.watch(currentScraperProvider);
   return scraper.getDetail(url);
 });
+
+final savedVideoDetailProvider = FutureProvider.autoDispose
+    .family<VideoModel, VideoModel>((ref, video) async {
+      final fetch = ref.watch(originalSourceDetailProvider);
+      final detail = await fetch(
+        video.id,
+        DatabaseService().sourceIdForFavorite(video),
+      );
+      if (decodeSourceVideoId(video.id) != null &&
+          detail.title.trim().toLowerCase() !=
+              video.title.trim().toLowerCase()) {
+        throw StateError('原片源返回的作品与收藏不一致');
+      }
+      return detail;
+    });
 
 /// 视频播放地址 Provider
 final playUrlsProvider = FutureProvider.family<List<String>, String>((

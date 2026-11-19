@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/video_model.dart';
 import '../services/scraper/base_scraper.dart';
+import '../services/scraper/lziapi_scraper.dart';
 import 'scraper_provider.dart';
 
 /// 搜索状态（支持无限滚动分页）
@@ -111,3 +112,19 @@ final searchProvider = StateNotifierProvider<SearchNotifier, SearchState>((
   final scraper = ref.watch(currentScraperProvider);
   return SearchNotifier(scraper);
 });
+
+/// 带预填关键词的搜索路由各自保留查询和分页。
+final sourceSearchProvider = StateNotifierProvider.autoDispose
+    .family<SearchNotifier, SearchState, Object>((ref, _) {
+      final scraper = ref.watch(currentScraperProvider);
+      return SearchNotifier(
+        scraper is LziApiScraper && scraper.allowListFallback
+            ? LziApiScraper(
+              primary: scraper.primary,
+              fallbacks: const [],
+              allowListFallback: false,
+              allowDetailPlaybackSubstitution: false,
+            )
+            : scraper,
+      );
+    });

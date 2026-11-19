@@ -5,7 +5,7 @@ import '../../core/utils/play_launcher.dart';
 import '../../models/video_model.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
-import '../../providers/scraper_provider.dart';
+import '../../services/database_service.dart';
 import '../../shared/widgets/wide_media_card.dart';
 
 class FavoritesScreen extends ConsumerWidget {
@@ -15,9 +15,7 @@ class FavoritesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final favorites = ref.watch(favoritesProvider);
     // 反查观看历史：收藏卡上展示进度并支持一键续播
-    final historyMap = {
-      for (final item in ref.watch(historyProvider)) item.videoId: item,
-    };
+    ref.watch(historyProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -47,7 +45,14 @@ class FavoritesScreen extends ConsumerWidget {
                     itemCount: favorites.length,
                     itemBuilder: (context, index) {
                       final video = favorites[index];
-                      final history = historyMap[video.id];
+                      final history = DatabaseService().historyForVideo(video);
+                      void openDetails() {
+                        context.push(
+                          '/detail/${Uri.encodeComponent(video.id)}',
+                          extra: video,
+                        );
+                      }
+
                       return WideMediaCard(
                         title: video.title,
                         coverUrl: video.cover,
@@ -57,24 +62,12 @@ class FavoritesScreen extends ConsumerWidget {
                                 ? null
                                 : '共 ${video.episodes!.length} 集',
                         progress: history?.progress,
-                        onTap:
-                            () => context.push(
-                              '/detail/${Uri.encodeComponent(video.id)}',
-                            ),
+                        onTap: openDetails,
                         onResume: () {
                           if (history != null) {
-                            launchHistoryResume(
-                              context,
-                              history,
-                              fetchDetail:
-                                  () => ref
-                                      .read(currentScraperProvider)
-                                      .getDetail(history.videoId),
-                            );
+                            resumeFromOriginalSource(context, ref, history);
                           } else {
-                            context.push(
-                              '/detail/${Uri.encodeComponent(video.id)}',
-                            );
+                            openDetails();
                           }
                         },
                         onLongPress: () => _confirmRemove(context, ref, video),

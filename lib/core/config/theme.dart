@@ -29,9 +29,10 @@ extension NovaSemanticColorsContext on BuildContext {
       );
 }
 
-/// Neutral surfaces keep the artwork prominent. Blue is reserved for actions.
+/// Ink-blue surfaces and warm amber accents frame artwork in dark mode.
 class AppTheme {
   static const seedColor = Color(0xFF35667A);
+  static const _amber = Color(0xFFEDB769);
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
 
@@ -41,31 +42,31 @@ class AppTheme {
       seedColor: seedColor,
       brightness: brightness,
     ).copyWith(
-      primary: dark ? const Color(0xFFA0CCDF) : seedColor,
-      onPrimary: dark ? const Color(0xFF103442) : Colors.white,
+      primary: dark ? _amber : seedColor,
+      onPrimary: dark ? const Color(0xFF30200D) : Colors.white,
       primaryContainer:
-          dark ? const Color(0xFF273E49) : const Color(0xFFE1EBF0),
+          dark ? const Color(0xFF382D25) : const Color(0xFFE1EBF0),
       onPrimaryContainer:
-          dark ? const Color(0xFFD0E9F3) : const Color(0xFF244A5C),
+          dark ? const Color(0xFFFFDAA8) : const Color(0xFF244A5C),
       secondaryContainer:
-          dark ? const Color(0xFF2B353D) : const Color(0xFFE7ECEE),
+          dark ? const Color(0xFF273244) : const Color(0xFFE7ECEE),
       onSecondaryContainer:
-          dark ? const Color(0xFFD6E1E6) : const Color(0xFF344B56),
-      surface: dark ? const Color(0xFF171B1F) : const Color(0xFFFAFAF8),
-      surfaceContainerLowest: dark ? const Color(0xFF121619) : Colors.white,
+          dark ? const Color(0xFFD6E1ED) : const Color(0xFF344B56),
+      surface: dark ? const Color(0xFF10151F) : const Color(0xFFFAFAF8),
+      surfaceContainerLowest: dark ? const Color(0xFF0B1019) : Colors.white,
       surfaceContainerLow:
-          dark ? const Color(0xFF1E2328) : const Color(0xFFF3F4F2),
+          dark ? const Color(0xFF151D29) : const Color(0xFFF3F4F2),
       surfaceContainer:
-          dark ? const Color(0xFF23292E) : const Color(0xFFEDEFED),
+          dark ? const Color(0xFF1A2331) : const Color(0xFFEDEFED),
       surfaceContainerHigh:
-          dark ? const Color(0xFF2B3238) : const Color(0xFFE6EAE8),
+          dark ? const Color(0xFF202B3B) : const Color(0xFFE6EAE8),
       surfaceContainerHighest:
-          dark ? const Color(0xFF353D44) : const Color(0xFFDBE1DE),
-      onSurface: dark ? const Color(0xFFE8EDF0) : const Color(0xFF20282D),
+          dark ? const Color(0xFF2A384B) : const Color(0xFFDBE1DE),
+      onSurface: dark ? const Color(0xFFF1F3F7) : const Color(0xFF20282D),
       onSurfaceVariant:
-          dark ? const Color(0xFFADB7BF) : const Color(0xFF5B6870),
-      outline: dark ? const Color(0xFF74838D) : const Color(0xFF75828A),
-      outlineVariant: dark ? const Color(0xFF354049) : const Color(0xFFD7DEDD),
+          dark ? const Color(0xFFAAB5C6) : const Color(0xFF5B6870),
+      outline: dark ? const Color(0xFF76869D) : const Color(0xFF75828A),
+      outlineVariant: dark ? const Color(0xFF2D394B) : const Color(0xFFD7DEDD),
     );
     final text = ThemeData(brightness: brightness).textTheme
         .apply(
@@ -133,6 +134,7 @@ class AppTheme {
       ],
       textTheme: text,
       scaffoldBackgroundColor: colors.surface,
+      focusColor: colors.primary.withValues(alpha: 0.16),
       extensions: [
         NovaSemanticColors(
           success: dark ? const Color(0xFF91CBB3) : const Color(0xFF3C7660),

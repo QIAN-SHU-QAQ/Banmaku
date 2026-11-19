@@ -4,14 +4,18 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../models/video_model.dart';
+import '../../providers/scraper_provider.dart';
 import '../../providers/search_provider.dart';
 import '../../services/database_service.dart';
 import '../../shared/widgets/poster_card.dart';
+import '../../shared/widgets/source_picker.dart';
 
 /// 全屏搜索页（覆盖整个窗口，不走 Rail shell）：
 /// 搜索框 + 筛选 chips + 结果计数 + 海报/列表视图切换。
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.initialKeyword});
+
+  final String? initialKeyword;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -25,12 +29,42 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   bool _showAsGrid = true;
   String? _genreFilter;
+  String _submittedKeyword = '';
+
+  ProviderListenable<SearchState> get _search =>
+      widget.initialKeyword == null
+          ? searchProvider
+          : sourceSearchProvider(this);
+  ProviderListenable<SearchNotifier> get _searchNotifier =>
+      widget.initialKeyword == null
+          ? searchProvider.notifier
+          : sourceSearchProvider(this).notifier;
 
   @override
   void initState() {
     super.initState();
-    _searchController.text = ref.read(searchProvider).keyword;
+    _submittedKeyword =
+        widget.initialKeyword?.trim() ?? ref.read(_search).keyword;
+    _searchController.text = _submittedKeyword;
     _searchHistory.addAll(DatabaseService().getSearchHistory());
+    if (widget.initialKeyword != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _performSearch(_submittedKeyword);
+      });
+    }
+    ref.listenManual(currentScraperProvider, (_, scraper) {
+      final query = _submittedKeyword;
+      if (query.isEmpty) return;
+      Future.microtask(() {
+        if (!mounted ||
+            _submittedKeyword != query ||
+            !identical(ref.read(currentScraperProvider), scraper)) {
+          return;
+        }
+        setState(() => _genreFilter = null);
+        ref.read(_searchNotifier).search(query);
+      });
+    });
   }
 
   @override
@@ -44,11 +78,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
 
-    setState(() => _genreFilter = null);
     _searchFocus.unfocus();
 
     // 添加到搜索历史（本地展示 + 持久化）
     setState(() {
+      _submittedKeyword = trimmed;
+      _genreFilter = null;
       _searchHistory.remove(trimmed);
       _searchHistory.insert(0, trimmed);
       if (_searchHistory.length > 10) {
@@ -57,7 +92,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
     DatabaseService().addSearchHistory(trimmed);
 
-    ref.read(searchProvider.notifier).search(trimmed);
+    ref.read(_searchNotifier).search(trimmed);
   }
 
   /// 从结果的 genre 字段提取筛选项（去重，保序，最多 10 个）
@@ -77,7 +112,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final searchState = ref.watch(searchProvider);
+    final searchState = ref.watch(_search);
     final colorScheme = Theme.of(context).colorScheme;
 
     final genres = _extractGenres(searchState.results);
@@ -119,7 +154,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         constraints: const BoxConstraints(maxWidth: 640),
                         child: TextField(
                           controller: _searchController,
-                          autofocus: true,
+                          autofocus: widget.initialKeyword == null,
                           focusNode: _searchFocus,
                           textInputAction: TextInputAction.search,
                           onSubmitted: _performSearch,
@@ -139,6 +174,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     onPressed: () => _performSearch(_searchController.text),
                     child: const Text('搜索'),
                   ),
+                  const SourcePicker(),
+                  const SizedBox(width: 8),
                 ],
               ),
             ),
@@ -239,9 +276,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         onNotification: (notification) {
                           if (notification.metrics.extentAfter < 400 &&
                               !searchState.isLoading &&
+                              searchState.error == null &&
                               searchState.hasMore &&
                               searchState.keyword.isNotEmpty) {
-                            ref.read(searchProvider.notifier).loadMore();
+                            ref.read(_searchNotifier).loadMore();
                           }
                           return false;
                         },
@@ -266,7 +304,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       : _buildSearchSuggestions(context),
             ),
             if (searchState.isLoading && searchState.results.isNotEmpty)
-              const LinearProgressIndicator(minHeight: 2),
+              const LinearProgressIndicator(minHeight: 2)
+            else if (searchState.error != null &&
+                searchState.results.isNotEmpty)
+              TextButton(
+                onPressed: ref.read(_searchNotifier).loadMore,
+                child: const Text('加载更多失败，重试'),
+              ),
           ],
         ),
       ),
@@ -298,27 +342,38 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildPosterGrid(BuildContext context, List<VideoModel> results) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 180,
-        mainAxisSpacing: 24,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.57,
-      ),
-      itemCount: results.length,
-      itemBuilder: (context, index) {
-        final video = results[index];
-        return PosterCard(
-          video: video,
-          onTap: () => context.push('/detail/${Uri.encodeComponent(video.id)}'),
-        );
-      },
+    final active = ref.watch(activeSourceConfigProvider);
+    return LayoutBuilder(
+      builder:
+          (context, constraints) => GridView.builder(
+            padding: const EdgeInsets.all(16),
+            gridDelegate: posterGridDelegate(
+              context,
+              constraints.maxWidth - 32,
+              maxTileWidth: 180,
+              spacing: 16,
+            ),
+            itemCount: results.length,
+            itemBuilder: (context, index) {
+              final video = results[index];
+              final detail = '/detail/${Uri.encodeComponent(video.id)}';
+              return PosterCard(
+                video: video,
+                showSource: isFromOtherSource(video, active),
+                onTap: () => context.push(detail),
+                onPlay:
+                    widget.initialKeyword == null
+                        ? () => context.push('$detail?play=1')
+                        : null,
+              );
+            },
+          ),
     );
   }
 
   Widget _buildResultList(BuildContext context, List<VideoModel> results) {
     final colorScheme = Theme.of(context).colorScheme;
+    final active = ref.watch(activeSourceConfigProvider);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 860),
@@ -379,11 +434,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               style: Theme.of(context).textTheme.titleSmall
                                   ?.copyWith(fontWeight: FontWeight.w600),
                             ),
-                            if (video.year != null || video.genre != null)
+                            if (video.year != null ||
+                                video.genre != null ||
+                                (video.source != null &&
+                                    isFromOtherSource(video, active)))
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
                                   [
+                                    if (isFromOtherSource(video, active))
+                                      video.source,
                                     video.year,
                                     video.genre,
                                   ].whereType<String>().join(' · '),
@@ -547,12 +607,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          FilledButton(
-            onPressed:
-                () => ref
-                    .read(searchProvider.notifier)
-                    .search(ref.read(searchProvider).keyword),
-            child: const Text('重试'),
+          Wrap(
+            spacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton(
+                onPressed:
+                    () => ref.read(_searchNotifier).search(_submittedKeyword),
+                child: const Text('重试'),
+              ),
+              const SourcePicker(label: '切换片源'),
+            ],
           ),
         ],
       ),

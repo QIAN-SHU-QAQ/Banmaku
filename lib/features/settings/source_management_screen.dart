@@ -18,7 +18,11 @@ class SourceManagementScreen extends ConsumerStatefulWidget {
 class _SourceManagementScreenState
     extends ConsumerState<SourceManagementScreen> {
   Future<void> _selectSource(String id) async {
-    await DatabaseService().setActiveSourceId(id);
+    await ref.read(selectSourceProvider)(id);
+  }
+
+  Future<void> _setAutoFallback(bool value) async {
+    await DatabaseService().setSourceAutoFallback(value);
     if (!mounted) return;
     ref.read(sourceVersionProvider.notifier).state++;
   }
@@ -42,8 +46,8 @@ class _SourceManagementScreenState
   Future<void> _deleteSource(SourceConfig source) async {
     final db = DatabaseService();
     final sources = db.getSources().where((s) => s.id != source.id).toList();
-    if (sources.isEmpty) {
-      _snack('至少保留一个数据源');
+    if (!sources.any((s) => s.enabled)) {
+      _snack('至少保留一个启用的数据源');
       return;
     }
     await db.saveSources(sources);
@@ -64,7 +68,10 @@ class _SourceManagementScreenState
     final started = DateTime.now();
     try {
       final videos = await LziApiScraper(
-        primary: source,
+        primary: source.copyWith(enabled: true),
+        fallbacks: const [],
+        allowListFallback: false,
+        allowDetailPlaybackSubstitution: false,
       ).getHome(page: 1).timeout(const Duration(seconds: 15));
       final elapsed = DateTime.now().difference(started).inMilliseconds;
       _snack(
@@ -166,11 +173,17 @@ class _SourceManagementScreenState
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               Text(
-                '当前主源：${active.name}。主源失败时会自动回退到其它启用的源；'
-                '源失效时可在这里切换或补充新源。',
+                '当前片源：${active.name}',
                 style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
               ),
               const SizedBox(height: 12),
+              SwitchListTile(
+                title: const Text('自动尝试其他片源'),
+                subtitle: const Text('发现或搜索请求失败时，尝试其他启用的片源'),
+                value: ref.watch(sourceAutoFallbackProvider),
+                onChanged: _setAutoFallback,
+              ),
+              const Divider(),
               for (final source in sources) _sourceTile(source, active.id),
               const Divider(),
               ListTile(
