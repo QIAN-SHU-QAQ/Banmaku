@@ -11,6 +11,9 @@ import '../../services/scraper/base_scraper.dart';
 import '../../shared/widgets/desktop_page_header.dart';
 import '../../shared/widgets/poster_card.dart';
 import '../../shared/widgets/source_picker.dart';
+import 'playback_search_groups.dart';
+import 'widgets/catalog_work_dialog.dart';
+import 'widgets/playback_source_dialog.dart';
 import 'widgets/search_result_preview.dart';
 
 /// 全屏搜索页（覆盖整个窗口，不走 Rail shell）：
@@ -20,10 +23,14 @@ class SearchScreen extends ConsumerStatefulWidget {
     super.key,
     this.initialKeyword,
     this.recoverySearch = true,
+    this.catalogSearch = false,
+    this.allSources = false,
   });
 
   final String? initialKeyword;
   final bool recoverySearch;
+  final bool catalogSearch;
+  final bool allSources;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -36,29 +43,36 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final List<String> _hotSearches = ['鬼灭之刃', '进击的巨人', '咒术回战', '间谍过家家', '电锯人'];
 
   bool _showAsGrid = true;
-  String? _genreFilter;
-  ({String id, BaseScraper scraper})? _selection;
+  String? _resultFilter;
+  ({String id, BaseScraper? scraper})? _selection;
   String _submittedKeyword = '';
   int _queryRevision = 0;
 
   bool get _isSourceRecovery =>
-      widget.initialKeyword != null && widget.recoverySearch;
+      !widget.catalogSearch &&
+      widget.initialKeyword != null &&
+      widget.recoverySearch;
+  bool get _canQuickPlay =>
+      !widget.catalogSearch && !widget.allSources && !_isSourceRecovery;
   String? get _selectedId => _selection?.id;
 
-  ProviderListenable<SearchState> get _search =>
-      widget.initialKeyword == null
-          ? searchProvider
-          : sourceSearchProvider(this);
-  ProviderListenable<SearchNotifier> get _searchNotifier =>
-      widget.initialKeyword == null
-          ? searchProvider.notifier
-          : sourceSearchProvider(this).notifier;
+  late final _search = searchProvider((
+    session: this,
+    mode:
+        widget.catalogSearch
+            ? SearchMode.catalog
+            : widget.allSources
+            ? SearchMode.allSources
+            : _isSourceRecovery
+            ? SearchMode.strictSource
+            : SearchMode.source,
+  ));
+  ProviderListenable<SearchNotifier> get _searchNotifier => _search.notifier;
 
   @override
   void initState() {
     super.initState();
-    _submittedKeyword =
-        widget.initialKeyword?.trim() ?? ref.read(_search).keyword;
+    _submittedKeyword = widget.initialKeyword?.trim() ?? '';
     _searchController.text = _submittedKeyword;
     _searchHistory.addAll(DatabaseService().getSearchHistory());
     if (widget.initialKeyword != null) {
@@ -66,17 +80,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         if (mounted) _performSearch(_submittedKeyword);
       });
     }
-    ref.listenManual(currentScraperProvider, (_, scraper) {
+    if (widget.catalogSearch) return;
+    ref.listenManual(_searchNotifier, (_, notifier) {
       final query = _submittedKeyword;
       if (query.isEmpty) return;
       Future.microtask(() {
         if (!mounted ||
             _submittedKeyword != query ||
-            !identical(ref.read(currentScraperProvider), scraper)) {
+            !identical(ref.read(_searchNotifier), notifier)) {
           return;
         }
         setState(_resetResultsView);
-        ref.read(_searchNotifier).search(query);
+        notifier.search(query);
       });
     });
   }
@@ -90,7 +105,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   void _performSearch(String query) {
     final trimmed = query.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty) {
+      _clearSearch();
+      return;
+    }
 
     _searchFocus.unfocus();
 
@@ -109,33 +127,44 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ref.read(_searchNotifier).search(trimmed);
   }
 
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() {
+      _submittedKeyword = '';
+      _resetResultsView();
+    });
+    ref.read(_searchNotifier).clear();
+  }
+
   void _resetResultsView() {
-    _genreFilter = null;
+    _resultFilter = null;
     _selection = null;
     _queryRevision++;
   }
 
-  void _setGenreFilter(String? genre) {
+  void _setResultFilter(String? filter) {
     final selectedId = _selectedId;
     setState(() {
-      _genreFilter = genre;
+      _resultFilter = filter;
       if (selectedId != null &&
           !ref
               .read(_search)
               .results
               .any(
-                (video) => video.id == selectedId && _hasGenre(video, genre),
+                (video) =>
+                    video.id == selectedId && _matchesFilter(video, filter),
               )) {
         _selection = null;
       }
     });
   }
 
-  bool _hasGenre(VideoModel video, String? genre) =>
-      genre == null ||
-      (video.genre ?? '')
-          .split(RegExp(r'[,，/、|]'))
-          .any((part) => part.trim() == genre);
+  bool _matchesFilter(VideoModel video, String? filter) {
+    if (filter == null) return true;
+    return (video.genre ?? '')
+        .split(RegExp(r'[,，/、|]'))
+        .any((part) => part.trim() == filter);
+  }
 
   /// 从结果的 genre 字段提取筛选项（去重，保序，最多 10 个）
   List<String> _extractGenres(List<VideoModel> results) {
@@ -157,15 +186,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final searchState = ref.watch(_search);
     final colorScheme = Theme.of(context).colorScheme;
 
-    final genres = _extractGenres(searchState.results);
-    if (_genreFilter != null && !genres.contains(_genreFilter)) {
-      _genreFilter = null;
+    final groups =
+        widget.allSources
+            ? groupPlaybackSearchResults(searchState.results)
+            : const <String, List<VideoModel>>{};
+    final results =
+        widget.allSources
+            ? groups.values.map((versions) => versions.first).toList()
+            : searchState.results;
+    final filters =
+        widget.allSources ? const <String>[] : _extractGenres(results);
+    if (_resultFilter != null && !filters.contains(_resultFilter)) {
+      _resultFilter = null;
     }
     final filtered =
-        _genreFilter == null
-            ? searchState.results
-            : searchState.results
-                .where((video) => _hasGenre(video, _genreFilter))
+        _resultFilter == null
+            ? results
+            : results
+                .where((video) => _matchesFilter(video, _resultFilter))
                 .toList();
 
     return Scaffold(
@@ -173,7 +211,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: Column(
           children: [
             DesktopPageHeader(
-              title: '搜索',
+              title: widget.catalogSearch ? '作品搜索' : '片源搜索',
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back_rounded),
                 tooltip: '返回',
@@ -183,24 +221,66 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               toolbar: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      autofocus: widget.initialKeyword == null,
-                      focusNode: _searchFocus,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: _performSearch,
-                      decoration: const InputDecoration(
-                        hintText: '输入片名',
-                        prefixIcon: Icon(Icons.search),
-                        isDense: true,
-                      ),
+                    child: ValueListenableBuilder(
+                      valueListenable: _searchController,
+                      builder:
+                          (context, value, _) => TextField(
+                            controller: _searchController,
+                            autofocus: widget.initialKeyword == null,
+                            focusNode: _searchFocus,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: _performSearch,
+                            onChanged: (text) {
+                              if (text.trim().isEmpty &&
+                                  _submittedKeyword.isNotEmpty) {
+                                _clearSearch();
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: '输入片名',
+                              prefixIcon: const Icon(Icons.search),
+                              isDense: true,
+                              suffixIconConstraints:
+                                  const BoxConstraints.tightFor(
+                                    width: 40,
+                                    height: 36,
+                                  ),
+                              suffixIcon:
+                                  value.text.isEmpty
+                                      ? null
+                                      : IconButton(
+                                        tooltip: '清空搜索',
+                                        icon: const Icon(
+                                          Icons.close_rounded,
+                                          size: 18,
+                                        ),
+                                        onPressed: () {
+                                          _clearSearch();
+                                          _searchFocus.requestFocus();
+                                        },
+                                      ),
+                            ),
+                          ),
                     ),
                   ),
                   TextButton(
                     onPressed: () => _performSearch(_searchController.text),
                     child: const Text('搜索'),
                   ),
-                  const SourcePicker(),
+                  if (widget.catalogSearch)
+                    OutlinedButton(
+                      onPressed:
+                          () =>
+                              openSourceSearch(context, _searchController.text),
+                      child: const Text('按片源搜索'),
+                    )
+                  else if (widget.allSources)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('全部已启用片源'),
+                    )
+                  else
+                    const SourcePicker(),
                 ],
               ),
             ),
@@ -215,7 +295,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       child: SizedBox(
                         height: 40,
                         child:
-                            genres.isEmpty
+                            filters.isEmpty
                                 ? const SizedBox.shrink()
                                 : ListView(
                                   scrollDirection: Axis.horizontal,
@@ -234,12 +314,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                           ),
                                         ),
                                         label: const Text('全部'),
-                                        selected: _genreFilter == null,
+                                        selected: _resultFilter == null,
                                         onSelected:
-                                            (_) => _setGenreFilter(null),
+                                            (_) => _setResultFilter(null),
                                       ),
                                     ),
-                                    for (final genre in genres)
+                                    for (final filter in filters)
                                       Padding(
                                         padding: const EdgeInsets.only(
                                           right: 8,
@@ -252,11 +332,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                               6,
                                             ),
                                           ),
-                                          label: Text(genre),
-                                          selected: _genreFilter == genre,
+                                          label: Text(filter),
+                                          selected: _resultFilter == filter,
                                           onSelected:
-                                              (selected) => _setGenreFilter(
-                                                selected ? genre : null,
+                                              (selected) => _setResultFilter(
+                                                selected ? filter : null,
                                               ),
                                         ),
                                       ),
@@ -265,7 +345,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       ),
                     ),
                     Text(
-                      '共 ${filtered.length} 条',
+                      '共 ${filtered.length} ${widget.allSources ? '部作品' : '条'}',
                       style: TextStyle(
                         fontSize: 12,
                         color: colorScheme.onSurfaceVariant,
@@ -286,12 +366,33 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ],
 
+            if (searchState.failedSources.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '查询失败：${searchState.failedSources.join('、')}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _performSearch(_submittedKeyword),
+                      child: const Text('重新查询'),
+                    ),
+                  ],
+                ),
+              ),
+
             Expanded(
               child:
                   searchState.isLoading && searchState.results.isEmpty
                       ? const Center(child: CircularProgressIndicator())
                       : searchState.results.isNotEmpty
-                      ? _buildResults(filtered, searchState)
+                      ? _buildResults(filtered, searchState, groups)
                       : searchState.error != null
                       ? _buildError(context, searchState.error!)
                       : searchState.keyword.isNotEmpty
@@ -305,6 +406,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               TextButton(
                 onPressed: ref.read(_searchNotifier).loadMore,
                 child: const Text('加载更多失败，重试'),
+              )
+            else if (widget.allSources &&
+                searchState.hasMore &&
+                searchState.results.isNotEmpty)
+              TextButton(
+                onPressed: ref.read(_searchNotifier).loadMore,
+                child: const Text('加载更多作品'),
               ),
           ],
         ),
@@ -314,12 +422,26 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   // ---------- 结果视图 ----------
 
-  Widget _buildResults(List<VideoModel> results, SearchState state) {
+  Widget _buildResults(
+    List<VideoModel> results,
+    SearchState state,
+    Map<String, List<VideoModel>> groups,
+  ) {
+    final selection = _selection;
     final selected =
-        results.where((video) => video.id == _selectedId).firstOrNull;
+        results.where((video) => video.id == selection?.id).firstOrNull;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showPreview = constraints.maxWidth >= 1120;
+        final canPreview = !widget.allSources && constraints.maxWidth >= 1120;
+        void open(VideoModel video) {
+          final versions = groups[video.id];
+          if (versions != null) {
+            _choosePlaybackSource(versions);
+          } else {
+            _openResult(video, canPreview: canPreview);
+          }
+        }
+
         final list = NotificationListener<ScrollNotification>(
           onNotification: (notification) {
             if (notification.depth == 0 &&
@@ -344,27 +466,33 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ),
                   )
                   : _showAsGrid
-                  ? _buildPosterGrid(context, results, showPreview: showPreview)
+                  ? _buildPosterGrid(
+                    context,
+                    results,
+                    canPreview: canPreview,
+                    onOpen: open,
+                  )
                   : _buildResultList(
                     context,
                     results,
-                    showPreview: showPreview,
+                    canPreview: canPreview,
+                    onOpen: open,
                   ),
         );
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(flex: 46, child: list),
-            if (showPreview) ...[
+            Expanded(child: list),
+            if (canPreview && selection != null && selected != null) ...[
               const VerticalDivider(width: 1),
-              Expanded(
-                flex: 54,
+              SizedBox(
+                width: (constraints.maxWidth / 3).clamp(360.0, 500.0),
                 child: SearchResultPreview(
-                  key: ValueKey(selected?.id),
+                  key: ValueKey(selected.id),
                   result: selected,
-                  scraper: _selection?.scraper,
-                  onOpenDetails:
-                      selected == null ? null : () => _openDetails(selected),
+                  scraper: selection.scraper,
+                  onOpenDetails: () => _openPreviewTarget(selected),
+                  onClose: () => setState(() => _selection = null),
                 ),
               ),
             ],
@@ -374,11 +502,30 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  void _openResult(VideoModel video, {required bool showPreview}) {
-    if (showPreview) {
+  Future<void> _choosePlaybackSource(List<VideoModel> versions) async {
+    final selected = await choosePlaybackSource(context, versions);
+    if (mounted && selected != null) _openDetails(selected);
+  }
+
+  void _openResult(VideoModel video, {required bool canPreview}) {
+    if (canPreview) {
       setState(() {
-        _selection = (id: video.id, scraper: ref.read(currentScraperProvider));
+        _selection = (
+          id: video.id,
+          scraper:
+              widget.catalogSearch ? null : ref.read(currentScraperProvider),
+        );
       });
+    } else if (widget.catalogSearch) {
+      showCatalogWork(context, video);
+    } else {
+      _openDetails(video);
+    }
+  }
+
+  void _openPreviewTarget(VideoModel video) {
+    if (widget.catalogSearch) {
+      openSourceSearch(context, video.title, fromCatalog: true);
     } else {
       _openDetails(video);
     }
@@ -406,7 +553,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             const SizedBox(height: 16),
             const Text('未找到相关动漫'),
             const SizedBox(height: 8),
-            Text('没有找到“$keyword”，试试其他名称或关键词。', textAlign: TextAlign.center),
+            Text(
+              widget.catalogSearch
+                  ? '作品库没有找到“$keyword”。可以试试别名、原名，或按片源搜索。'
+                  : widget.allSources
+                  ? '已响应的片源未找到“$keyword”的剧集地址。可以试试其他名称。'
+                  : '当前片源未找到“$keyword”。可以切换片源，或试试其他名称。',
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -416,7 +570,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget _buildPosterGrid(
     BuildContext context,
     List<VideoModel> results, {
-    required bool showPreview,
+    required bool canPreview,
+    required ValueChanged<VideoModel> onOpen,
   }) {
     final active = ref.watch(activeSourceConfigProvider);
     return LayoutBuilder(
@@ -437,12 +592,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               return PosterCard(
                 key: ValueKey((video.id, index)),
                 video: video,
-                showSource: isFromOtherSource(video, active),
-                previewsOnEnter: showPreview,
-                selected: showPreview && _selectedId == video.id,
-                onTap: () => _openResult(video, showPreview: showPreview),
+                showSource:
+                    !widget.allSources && isFromOtherSource(video, active),
+                previewsOnEnter: canPreview,
+                selected: canPreview && _selectedId == video.id,
+                onTap: () => onOpen(video),
                 onPlay:
-                    !_isSourceRecovery
+                    _canQuickPlay
                         ? () => _openDetails(video, play: true)
                         : null,
               );
@@ -454,7 +610,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget _buildResultList(
     BuildContext context,
     List<VideoModel> results, {
-    required bool showPreview,
+    required bool canPreview,
+    required ValueChanged<VideoModel> onOpen,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final active = ref.watch(activeSourceConfigProvider);
@@ -470,14 +627,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           itemBuilder: (context, index) {
             final video = results[index];
             final cover = video.cover;
-            final selected = showPreview && _selectedId == video.id;
+            final selected = canPreview && _selectedId == video.id;
+            final showSource =
+                !widget.allSources && isFromOtherSource(video, active);
             return Card(
               color: selected ? colorScheme.primaryContainer : null,
               child: Semantics(
-                selected: showPreview ? selected : null,
+                selected: canPreview ? selected : null,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(6),
-                  onTap: () => _openResult(video, showPreview: showPreview),
+                  onTap: () => onOpen(video),
                   child: Padding(
                     padding: const EdgeInsets.all(10),
                     child: Row(
@@ -523,14 +682,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               ),
                               if (video.year != null ||
                                   video.genre != null ||
-                                  (video.source != null &&
-                                      isFromOtherSource(video, active)))
+                                  (video.source != null && showSource))
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4),
                                   child: Text(
                                     [
-                                      if (isFromOtherSource(video, active))
-                                        video.source,
+                                      if (showSource) video.source,
                                       video.year,
                                       video.genre,
                                     ].whereType<String>().join(' · '),
@@ -561,7 +718,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                             ],
                           ),
                         ),
-                        if (showPreview && !_isSourceRecovery)
+                        if (canPreview && _canQuickPlay)
                           IconButton(
                             tooltip: '播放 ${video.title}',
                             onPressed: () => _openDetails(video, play: true),
@@ -694,7 +851,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            error,
+            widget.catalogSearch ? '作品库暂时无法访问。' : error,
             style: TextStyle(
               color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
@@ -710,7 +867,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     () => ref.read(_searchNotifier).search(_submittedKeyword),
                 child: const Text('重试'),
               ),
-              const SourcePicker(label: '切换片源'),
+              if (!widget.catalogSearch && !widget.allSources)
+                const SourcePicker(label: '切换片源'),
             ],
           ),
         ],

@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:nova_play/features/search/search_screen.dart';
 import 'package:nova_play/models/video_model.dart';
+import 'package:nova_play/providers/scraper_provider.dart';
 import 'package:nova_play/providers/search_provider.dart';
 
 import '../fakes.dart';
@@ -96,7 +98,7 @@ void main() {
   Future<void> showSearch(WidgetTester tester, SearchNotifier notifier) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [searchProvider.overrideWith((ref) => notifier)],
+        overrides: [searchProvider.overrideWith((ref, args) => notifier)],
         child: const MaterialApp(home: SearchScreen()),
       ),
     );
@@ -140,4 +142,86 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('leaving search and reopening starts a fresh search', (
+    tester,
+  ) async {
+    final scraper = ControlledScraper();
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder:
+              (context, _) => Scaffold(
+                body: TextButton(
+                  onPressed: () => context.push('/search'),
+                  child: const Text('打开搜索'),
+                ),
+              ),
+        ),
+        GoRoute(path: '/search', builder: (_, _) => const SearchScreen()),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [currentScraperProvider.overrideWithValue(scraper)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.tap(find.text('打开搜索'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '上次查找');
+    await tester.tap(find.widgetWithText(TextButton, '搜索'));
+    await tester.pump();
+    scraper.requests['上次查找']!.complete([VideoModel(id: 'saved', title: '旧结果')]);
+    await tester.pumpAndSettle();
+    expect(find.text('旧结果'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开搜索'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '',
+    );
+    expect(find.text('热门搜索'), findsOneWidget);
+    expect(find.text('旧结果'), findsNothing);
+  });
+
+  testWidgets(
+    'deleting the query clears results and the clear button drops pending results',
+    (tester) async {
+      final scraper = ControlledScraper();
+      await showSearch(tester, SearchNotifier(scraper));
+      final field = find.byType(TextField);
+      final submit = find.widgetWithText(TextButton, '搜索');
+      await tester.enterText(field, '已有查询');
+      await tester.tap(submit);
+      await tester.pump();
+      scraper.requests['已有查询']!.complete([
+        VideoModel(id: 'old', title: '已经显示的结果'),
+      ]);
+      await tester.pumpAndSettle();
+      expect(find.text('已经显示的结果'), findsOneWidget);
+
+      await tester.enterText(field, '');
+      await tester.pumpAndSettle();
+      expect(find.text('热门搜索'), findsOneWidget);
+      expect(find.text('已经显示的结果'), findsNothing);
+
+      await tester.enterText(field, '慢查询');
+      await tester.tap(submit);
+      await tester.pump();
+      await tester.tap(find.byTooltip('清空搜索'));
+      scraper.requests['慢查询']!.complete([
+        VideoModel(id: 'late', title: '迟到的结果'),
+      ]);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller!.text, '');
+      expect(find.text('迟到的结果'), findsNothing);
+      expect(find.text('热门搜索'), findsOneWidget);
+    },
+  );
 }

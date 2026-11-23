@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_play/models/video_model.dart';
 import 'package:nova_play/providers/home_provider.dart';
-import 'package:nova_play/providers/scraper_provider.dart';
 import 'package:nova_play/providers/settings_provider.dart';
 import 'package:nova_play/services/database_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -46,7 +45,9 @@ void main() {
           ..pages[2] = [VideoModel(id: 'b', title: 'B')];
 
     final container = ProviderContainer(
-      overrides: [currentScraperProvider.overrideWithValue(scraper)],
+      overrides: [
+        discoveryPageLoaderProvider.overrideWithValue(scraper.getByCategory),
+      ],
     );
     addTearDown(container.dispose);
 

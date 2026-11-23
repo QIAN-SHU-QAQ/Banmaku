@@ -7,7 +7,7 @@ import '../../services/database_service.dart';
 import '../../services/scraper/lziapi_scraper.dart';
 import '../../services/scraper/source_config.dart';
 
-/// 数据源管理：内置源启停/切换/测速，支持添加自定义 maccms 源。
+/// 数据源管理：内置源启停和连接测试，支持添加自定义 MacCMS 源。
 class SourceManagementScreen extends ConsumerStatefulWidget {
   const SourceManagementScreen({super.key});
 
@@ -18,16 +18,6 @@ class SourceManagementScreen extends ConsumerStatefulWidget {
 
 class _SourceManagementScreenState
     extends ConsumerState<SourceManagementScreen> {
-  Future<void> _selectSource(String id) async {
-    await ref.read(selectSourceProvider)(id);
-  }
-
-  Future<void> _setAutoFallback(bool value) async {
-    await DatabaseService().setSourceAutoFallback(value);
-    if (!mounted) return;
-    ref.read(sourceVersionProvider.notifier).state++;
-  }
-
   Future<void> _toggleSource(SourceConfig source, bool enabled) async {
     final db = DatabaseService();
     final sources =
@@ -161,7 +151,7 @@ class _SourceManagementScreenState
   @override
   Widget build(BuildContext context) {
     final sources = ref.watch(sourceConfigsProvider);
-    final active = ref.watch(activeSourceConfigProvider);
+    final enabled = ref.watch(enabledSourcesProvider);
     final colors = Theme.of(context).colorScheme;
 
     return DesktopPage(
@@ -175,18 +165,11 @@ class _SourceManagementScreenState
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               Text(
-                '当前片源：${active.name}',
+                '搜索会同时查询已启用的 ${enabled.length} 个片源。',
                 style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
               ),
               const SizedBox(height: 12),
-              SwitchListTile(
-                title: const Text('自动尝试其他片源'),
-                subtitle: const Text('发现或搜索请求失败时，尝试其他启用的片源'),
-                value: ref.watch(sourceAutoFallbackProvider),
-                onChanged: _setAutoFallback,
-              ),
-              const Divider(),
-              for (final source in sources) _sourceTile(source, active.id),
+              for (final source in sources) _sourceTile(source),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.add_circle_outline),
@@ -201,19 +184,13 @@ class _SourceManagementScreenState
     );
   }
 
-  Widget _sourceTile(SourceConfig source, String activeId) {
+  Widget _sourceTile(SourceConfig source) {
     final colors = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Column(
         children: [
           ListTile(
-            leading: Radio<String>(
-              value: source.id,
-              groupValue: activeId,
-              onChanged:
-                  source.enabled ? (_) => _selectSource(source.id) : null,
-            ),
             title: Text(source.name),
             subtitle: Text(
               source.baseUrl,

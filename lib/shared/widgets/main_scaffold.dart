@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/branding.dart';
 import '../../core/window/main_window_chrome.dart';
 
 /// Branch indices follow routes.dart. Search is a full-window route.
@@ -95,38 +96,23 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Tooltip(
-      message: 'NovaPlay',
+      message: appDisplayName,
       child: SizedBox(
         height: 58,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    colors.primary,
-                    Color.lerp(colors.primary, colors.tertiary, 0.5)!,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: SizedBox.square(
-                dimension: 29,
-                child: Icon(
-                  Icons.play_arrow_rounded,
-                  color: colors.onPrimary,
-                  size: 21,
-                ),
-              ),
+            Image.asset(
+              appIconAsset,
+              width: 34,
+              height: 34,
+              cacheWidth: 128,
+              excludeFromSemantics: true,
             ),
             const SizedBox(height: 3),
             Text(
-              'NovaPlay',
+              appDisplayName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(

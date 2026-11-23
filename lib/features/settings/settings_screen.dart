@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/config/branding.dart';
 import '../../providers/danmaku_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -142,12 +143,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       heading(3),
       ListTile(
         leading: const Icon(Icons.info_outline, size: 20),
-        title: const Text('NovaPlay'),
+        title: const Text(appDisplayName),
         subtitle: const Text('视频聚合播放器'),
         onTap:
             () => showAboutDialog(
               context: context,
-              applicationName: 'NovaPlay',
+              applicationName: appDisplayName,
+              applicationIcon: Image.asset(
+                appIconAsset,
+                width: 48,
+                height: 48,
+                cacheWidth: 128,
+                excludeFromSemantics: true,
+              ),
               children: [const Text('视频聚合播放器')],
             ),
       ),

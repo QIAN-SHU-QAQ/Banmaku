@@ -70,11 +70,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/search',
-        builder:
-            (context, state) => SearchScreen(
-              initialKeyword: state.uri.queryParameters['q'],
-              recoverySearch: state.uri.queryParameters['from'] != 'schedule',
-            ),
+        builder: (context, state) {
+          final params = state.uri.queryParameters;
+          final keyword = params['q'];
+          final from = params['from'];
+          final sourceSearch = params['mode'] == 'source';
+          final catalog =
+              !sourceSearch && (keyword == null || from == 'schedule');
+          return SearchScreen(
+            initialKeyword: keyword,
+            catalogSearch: catalog,
+            allSources: !catalog,
+            recoverySearch:
+                from == 'catalog' || (!sourceSearch && from != 'schedule'),
+          );
+        },
       ),
       GoRoute(
         path: '/detail/:id',

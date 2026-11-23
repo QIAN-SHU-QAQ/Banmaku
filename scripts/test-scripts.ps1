@@ -80,7 +80,7 @@ try {
     # 1. package: BuildDir == staging dir must fail before deleting anything.
     $root1 = New-TempRoot "pkg_stage_overlap"
     $dist1 = Join-Path $root1 "dist"
-    $stage1 = Join-Path $dist1 "NovaPlay-1.0.0-windows-x64"
+    $stage1 = Join-Path $dist1 "Banmaku-1.0.0-windows-x64"
     New-FakeBuild $stage1
     Run-ExpectFailure "package: BuildDir == staging" $packageScript @{
         BuildDir = $stage1
@@ -106,7 +106,7 @@ try {
     New-FakeBuild $build3
     $out3 = Join-Path $root3 "dist"
     & $packageScript -BuildDir $build3 -OutputDir $out3 -Version "9.9.9" *> $null
-    $zip3 = Join-Path $out3 "NovaPlay-9.9.9-windows-x64.zip"
+    $zip3 = Join-Path $out3 "Banmaku-9.9.9-windows-x64.zip"
     $sha3 = "$zip3.sha256"
     if (-not (Test-Path -LiteralPath $zip3)) {
         $script:failures += "package: 成功用例没有生成 ZIP"
@@ -155,7 +155,7 @@ try {
     # 6. package: parent-directory junction must be resolved, not only the leaf.
     $root6 = New-TempRoot "pkg_parent_junction"
     $real6 = Join-Path $root6 "real"
-    $fake6 = Join-Path $real6 "dist\NovaPlay-1.0.0-windows-x64"
+    $fake6 = Join-Path $real6 "dist\Banmaku-1.0.0-windows-x64"
     New-FakeBuild $fake6
     $alias6 = Join-Path $root6 "alias"
     New-AliasJunction $alias6 $real6
@@ -184,13 +184,13 @@ try {
     #    check must resolve the existing prefix and keep the suffix).
     $root8 = New-TempRoot "pkg_junction_new_leaf"
     $real8 = Join-Path $root8 "real"
-    $fake8 = Join-Path $real8 "dist\NovaPlay-2.0.0-windows-x64"
+    $fake8 = Join-Path $real8 "dist\Banmaku-2.0.0-windows-x64"
     New-FakeBuild $fake8
     $alias8 = Join-Path $root8 "alias"
     New-AliasJunction $alias8 $real8
     $out8 = Join-Path $alias8 "dist\new-output-leaf"
     & $packageScript -BuildDir $fake8 -OutputDir $out8 -Version "2.0.0" *> $null
-    $zip8 = Join-Path $out8 "NovaPlay-2.0.0-windows-x64.zip"
+    $zip8 = Join-Path $out8 "Banmaku-2.0.0-windows-x64.zip"
     if (Test-Path -LiteralPath $zip8) {
         Write-Host "PASS: package: junction parent with new leaf"
     } else {
@@ -203,13 +203,18 @@ try {
     if ($null -ne $script:junctions) {
         foreach ($junction in $script:junctions) {
             if (Test-Path -LiteralPath $junction) {
-                & cmd /c rmdir "$junction" 2>$null
+                [System.IO.Directory]::Delete($junction)
             }
         }
     }
     foreach ($root in $script:tempRoots) {
         if (Test-Path -LiteralPath $root) {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            $resolvedRoot = (Resolve-Path -LiteralPath $root).ProviderPath
+            $tempPrefix = [System.IO.Path]::GetTempPath().TrimEnd('\') + '\'
+            if (-not $resolvedRoot.StartsWith($tempPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "测试清理路径超出临时目录：$resolvedRoot"
+            }
+            Remove-Item -LiteralPath $resolvedRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }

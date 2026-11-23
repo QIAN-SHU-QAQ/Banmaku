@@ -183,7 +183,7 @@ if ($Version -notmatch '^[0-9A-Za-z._\-]+$') {
     throw "版本号只能包含字母、数字、点、下划线和连字符：$Version"
 }
 
-$packageName = "NovaPlay-$Version-windows-x64"
+$packageName = "Banmaku-$Version-windows-x64"
 $stage = Join-Path $OutputDir $packageName
 $zipPath = Join-Path $OutputDir "$packageName.zip"
 $shaPath = "$zipPath.sha256"

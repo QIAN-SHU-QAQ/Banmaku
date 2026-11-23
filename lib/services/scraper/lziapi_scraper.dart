@@ -8,6 +8,30 @@ import 'base_scraper.dart';
 import 'source_config.dart';
 import 'source_identity.dart';
 
+typedef _Category = ({String id, String? parentId});
+
+enum _AnimeRegion {
+  domestic('国产动漫'),
+  japanese('日本动漫');
+
+  const _AnimeRegion(this.label);
+  final String label;
+
+  static _AnimeRegion? fromCategory(String name) => switch (name.trim()) {
+    '国产动漫' || '国产动画' || '中国动漫' || '大陆动漫' || '国漫' => domestic,
+    '日本动漫' || '日本动画' || '日漫' || '日韩动漫' || '日韩动画' => japanese,
+    _ => null,
+  };
+}
+
+class _AnimeFeed {
+  _AnimeFeed(this.keyword);
+
+  final String? keyword;
+  // One upstream page cursor per category ID for each displayed page.
+  final positions = <int, Map<String, int>>{};
+}
+
 /// maccms 风格 API 数据源。
 ///
 /// 默认使用内置的两个源（LziApi 主源、360zy 备用源），但源本身由
@@ -20,6 +44,7 @@ class LziApiScraper extends BaseScraper {
     List<SourceConfig>? fallbacks,
     this.allowDetailPlaybackSubstitution = true,
     this.allowListFallback = true,
+    this.animeCatalogOnly = false,
   }) : primary = primary ?? SourceConfig.defaults().first,
        _fallbacks = fallbacks ?? SourceConfig.defaults().skip(1).toList();
 
@@ -31,6 +56,7 @@ class LziApiScraper extends BaseScraper {
 
   final bool allowDetailPlaybackSubstitution;
   final bool allowListFallback;
+  final bool animeCatalogOnly;
 
   final HttpClient _httpClient = HttpClient();
 
@@ -97,20 +123,27 @@ class LziApiScraper extends BaseScraper {
   }
 
   /// 同源的分类菜单与列表请求共用一次分类查询。
-  final _categoryCache = <int, Future<Map<String, String>>>{};
+  final _categoryCache = <int, Future<Map<String, _Category>>>{};
+  final _animeFeeds = <(int, String?, bool), _AnimeFeed>{};
 
-  Future<Map<String, String>> _sourceCategories(int source) async {
-    if (_sources[source].id == lziApiSourceId) return _lziCategories;
+  Future<Map<String, _Category>> _sourceCategories(int source) async {
+    if (_sources[source].id == lziApiSourceId) {
+      return {
+        for (final entry in _lziCategories.entries)
+          entry.key: (id: entry.value, parentId: null),
+      };
+    }
 
     final pending = _categoryCache.putIfAbsent(source, () async {
       final data = await _fetchData({'ac': 'list'}, source: source);
       return {
-        for (final entry in (data['class'] as List? ?? const []))
+        for (final entry
+            in (data['class'] as List? ?? const []).whereType<Map>())
           if (entry case {
             'type_name': final String name,
             'type_id': final id,
           } when name.isNotEmpty && name != _allCategories && id != null)
-            name: id.toString(),
+            name: (id: id.toString(), parentId: entry['type_pid']?.toString()),
       };
     });
     try {
@@ -128,32 +161,238 @@ class LziApiScraper extends BaseScraper {
     return allowListFallback ? _sources.length : 1;
   }
 
+  Future<List<Map<String, dynamic>>> _listItems(
+    Map<String, dynamic> query,
+    int source,
+  ) async {
+    final data = await _fetchData(query, source: source);
+    return (data['list'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> _categoryItems(
+    Map<String, dynamic> query, {
+    required int source,
+    required _Category category,
+    required Iterable<_Category> categories,
+  }) async {
+    final ids = [category.id];
+    for (var i = 0; i < ids.length; i++) {
+      for (final candidate in categories) {
+        if (candidate.parentId == ids[i] && !ids.contains(candidate.id)) {
+          ids.add(candidate.id);
+        }
+      }
+    }
+
+    Future<List<Map<String, dynamic>>> fetch(String id) =>
+        _listItems({...query, 't': id}, source);
+
+    final direct = await fetch(category.id);
+    final children = ids.skip(1).toSet();
+    // Some sources already include child categories in the parent's feed.
+    if (children.isEmpty ||
+        direct.any((item) => children.contains(item['type_id']?.toString()))) {
+      return direct;
+    }
+
+    // Retry the whole page on failure to avoid skipping any child category.
+    const batchSize = 5;
+    final byId = <String, Map<String, dynamic>>{
+      for (final item in direct) item['vod_id'].toString(): item,
+    };
+    for (var start = 1; start < ids.length; start += batchSize) {
+      final pages = await Future.wait(
+        ids.skip(start).take(batchSize).map(fetch),
+      );
+      for (final page in pages) {
+        for (final item in page) {
+          byId.putIfAbsent(item['vod_id'].toString(), () => item);
+        }
+      }
+    }
+    return _orderedItems(byId.values);
+  }
+
+  List<Map<String, dynamic>> _orderedItems(
+    Iterable<Map<String, dynamic>> items,
+  ) {
+    final ordered =
+        items.indexed.map((entry) {
+            final (index, item) = entry;
+            final updated = DateTime.tryParse(
+              item['vod_time']?.toString() ?? '',
+            );
+            return (
+              index: index,
+              item: item,
+              time: updated?.millisecondsSinceEpoch,
+            );
+          }).toList()
+          ..sort((a, b) {
+            final byTime = (b.time ?? 0).compareTo(a.time ?? 0);
+            return byTime == 0 ? a.index.compareTo(b.index) : byTime;
+          });
+    return ordered.map((entry) => entry.item).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _animeItems(
+    int source,
+    Map<String, dynamic> query,
+    String? category, {
+    required bool requirePlayable,
+  }) async {
+    final catalog = await _sourceCategories(source);
+    final types = {
+      for (final entry in catalog.entries)
+        if (_AnimeRegion.fromCategory(entry.key) case final region?
+            when category == null ||
+                category == _allCategories ||
+                region.label == category)
+          entry.value.id: entry.key,
+    };
+    final requestedPage = query['pg'] as int;
+    final keyword = query['wd'] as String?;
+    final feedKey = (source, category, requirePlayable);
+    final previous = _animeFeeds[feedKey];
+    final feed =
+        requestedPage > 1 && previous != null && previous.keyword == keyword
+            ? previous
+            : (_animeFeeds[feedKey] = _AnimeFeed(keyword));
+    var page = requestedPage;
+    while (page > 1 && !feed.positions.containsKey(page)) {
+      page--;
+    }
+    var positions =
+        feed.positions[page] ?? {for (final id in types.keys) id: 1};
+    for (; ; page++) {
+      final next = <String, int>{};
+      final items = <String, Map<String, dynamic>>{};
+      for (final entry in positions.entries) {
+        final id = entry.key;
+        final result = await _nextAnimePage(
+          source,
+          query,
+          id: id,
+          name: types[id]!,
+          firstPage: entry.value,
+          requirePlayable: requirePlayable,
+        );
+        if (result.next != null) next[id] = result.next!;
+        for (final item in result.items) {
+          items.putIfAbsent(item['vod_id'].toString(), () => item);
+        }
+      }
+      feed.positions[page + 1] = next;
+      if (page == requestedPage) return _orderedItems(items.values);
+      positions = next;
+    }
+  }
+
+  Future<({List<Map<String, dynamic>> items, int? next})> _nextAnimePage(
+    int source,
+    Map<String, dynamic> query, {
+    required String id,
+    required String name,
+    required int firstPage,
+    required bool requirePlayable,
+  }) async {
+    const empty = (items: <Map<String, dynamic>>[], next: null);
+    final seen = <String>{};
+    for (var page = firstPage; ; page++) {
+      final data = await _fetchData({
+        ...query,
+        't': id,
+        'pg': page,
+      }, source: source);
+      final items = (data['list'] as List).cast<Map<String, dynamic>>();
+      if (items.isEmpty) return empty;
+      final matches =
+          items
+              .where(
+                (item) =>
+                    _matchesAnime(item, id, name) &&
+                    (!requirePlayable ||
+                        _parseEpisodes(item).any(_episodeHasHttpUrl)),
+              )
+              .toList();
+      final last = int.tryParse(data['pagecount'].toString());
+      if (matches.isNotEmpty || (last != null && page >= last)) {
+        return (
+          items: matches,
+          next: last != null && page >= last ? null : page + 1,
+        );
+      }
+      // Avoid looping if a source without pagination metadata ignores pg.
+      if (!seen.add(items.map((item) => item['vod_id']).join(','))) {
+        return empty;
+      }
+    }
+  }
+
+  bool _matchesAnime(Map<String, dynamic> item, String id, String name) {
+    final itemId = item['type_id']?.toString();
+    final itemName = item['type_name']?.toString();
+    if (itemId == null ? itemName?.trim() != name.trim() : itemId != id) {
+      return false;
+    }
+    if (_AnimeRegion.fromCategory(name) == _AnimeRegion.domestic) return true;
+    final area = item['vod_area']?.toString().trim().toLowerCase() ?? '';
+    if (area.isEmpty) return !name.contains('日韩');
+    return area
+        .split(RegExp(r'[\s/／,，、|｜;；·+]+'))
+        .any(
+          (part) => const {'日本', '日本国', 'japan', 'jp', 'jpn'}.contains(part),
+        );
+  }
+
   /// 空列表是有效结果；只有请求或协议异常才回退到下一个源。
   Future<List<VideoModel>> _listWithFallback(
     Map<String, dynamic> params, {
     String? category,
+    bool requirePlayable = false,
   }) async {
+    if (animeCatalogOnly &&
+        category != null &&
+        category != _allCategories &&
+        !_AnimeRegion.values.any((region) => region.label == category)) {
+      return [];
+    }
     for (var source = 0; source < _listSourceCount; source++) {
       try {
         final query = Map<String, dynamic>.of(params);
-        if (category == _allCategories &&
-            _sources[source].id == lziApiSourceId) {
-          query['t'] = _lziCategories[_defaultCategory];
+        final List<Map<String, dynamic>> items;
+        if (animeCatalogOnly) {
+          items = await _animeItems(
+            source,
+            query,
+            category,
+            requirePlayable: requirePlayable,
+          );
         } else if (category != null && category != _allCategories) {
           final categories = await _sourceCategories(source);
-          final categoryId = categories[category];
-          if (categoryId == null) {
+          final selected = categories[category];
+          if (selected == null) {
             throw StateError('数据源 ${_sources[source].name} 不支持该分类');
           }
-          query['t'] = categoryId;
+          items = await _categoryItems(
+            query,
+            source: source,
+            category: selected,
+            categories: categories.values,
+          );
+        } else {
+          if (category == _allCategories &&
+              _sources[source].id == lziApiSourceId) {
+            query['t'] = _lziCategories[_defaultCategory];
+          }
+          items = await _listItems(query, source);
         }
-        final data = await _fetchData(query, source: source);
-        return (data['list'] as List)
-            .map(
-              (item) =>
-                  _parseVideo(item as Map<String, dynamic>, source: source),
-            )
-            .toList();
+        final videos = items.map((item) => _parseVideo(item, source: source));
+        return requirePlayable && !animeCatalogOnly
+            ? videos
+                .where((video) => video.episodes!.any(_episodeHasHttpUrl))
+                .toList()
+            : videos.toList();
       } catch (e) {
         debugPrint('视频数据源 ${_sources[source].name} 请求失败: $e');
       }
@@ -165,13 +404,23 @@ class LziApiScraper extends BaseScraper {
   Future<List<String>> getCategories() async {
     if (!primary.enabled) return [_allCategories];
     final categories = await _sourceCategories(0);
+    if (animeCatalogOnly) {
+      final supported = categories.keys.map(_AnimeRegion.fromCategory).toSet();
+      return [
+        _allCategories,
+        for (final region in _AnimeRegion.values)
+          if (supported.contains(region)) region.label,
+      ];
+    }
     return [_allCategories, ...categories.keys];
   }
 
   @override
   Future<List<VideoModel>> getHome({int page = 1}) async {
     final category =
-        primary.id == lziApiSourceId ? _defaultCategory : _allCategories;
+        !animeCatalogOnly && primary.id == lziApiSourceId
+            ? _defaultCategory
+            : _allCategories;
     return getByCategory(category, page: page);
   }
 
@@ -186,6 +435,20 @@ class LziApiScraper extends BaseScraper {
   @override
   Future<List<VideoModel>> search(String keyword, {int page = 1}) async {
     return _listWithFallback({'ac': 'detail', 'wd': keyword, 'pg': page});
+  }
+
+  Future<List<VideoModel>> searchPlayable(String keyword, {int page = 1}) =>
+      _listWithFallback({
+        'ac': 'detail',
+        'wd': keyword,
+        'pg': page,
+      }, requirePlayable: true);
+
+  static bool _episodeHasHttpUrl(EpisodeModel episode) {
+    final uri = Uri.tryParse(episode.playUrl ?? episode.url);
+    return uri != null &&
+        uri.host.isNotEmpty &&
+        (uri.isScheme('http') || uri.isScheme('https'));
   }
 
   @override

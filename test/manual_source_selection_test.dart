@@ -17,21 +17,33 @@ import 'package:nova_play/features/settings/source_management_screen.dart';
 import 'package:nova_play/models/history_item.dart';
 import 'package:nova_play/models/video_model.dart';
 import 'package:nova_play/providers/scraper_provider.dart';
+import 'package:nova_play/providers/search_provider.dart';
+import 'package:nova_play/providers/home_provider.dart';
 import 'package:nova_play/services/database_service.dart';
+import 'package:nova_play/services/scraper/source_config.dart';
 import 'package:nova_play/shared/widgets/poster_card.dart';
+
+import 'fakes.dart';
 
 class _SourceResponses implements HttpClientAdapter {
   final requests = <RequestOptions>[];
   Future<ResponseBody> Function(RequestOptions)? lziResponse;
+  Future<ResponseBody> Function(RequestOptions)? alternateResponse;
 
-  static ResponseBody listing(List<Map<String, Object>> videos) =>
-      ResponseBody.fromString(
-        jsonEncode({'code': 1, 'list': videos}),
-        200,
-        headers: {
-          Headers.contentTypeHeader: ['application/json'],
-        },
-      );
+  static ResponseBody listing(
+    List<Map<String, Object>> videos, {
+    List<Map<String, Object>>? categories,
+  }) => ResponseBody.fromString(
+    jsonEncode({
+      'code': 1,
+      'list': videos,
+      if (categories != null) 'class': categories,
+    }),
+    200,
+    headers: {
+      Headers.contentTypeHeader: ['application/json'],
+    },
+  );
 
   @override
   Future<ResponseBody> fetch(
@@ -48,8 +60,26 @@ class _SourceResponses implements HttpClientAdapter {
         type: DioExceptionType.connectionError,
       );
     }
+    if (options.queryParameters['ac'] == 'list') {
+      return listing(
+        [],
+        categories: [
+          {'type_id': 38, 'type_name': '国产动漫', 'type_pid': 4},
+          {'type_id': 40, 'type_name': '日韩动漫', 'type_pid': 4},
+        ],
+      );
+    }
+    final alternate = alternateResponse;
+    if (alternate != null) return alternate(options);
+    if (options.queryParameters['t'] == '38') return listing([]);
     return listing([
-      {'vod_id': 28, 'vod_name': '来自 360zy', 'vod_play_url': ''},
+      {
+        'vod_id': 28,
+        'vod_name': '来自 360zy',
+        'vod_play_url': '',
+        'type_id': 40,
+        'vod_area': '日本',
+      },
     ]);
   }
 
@@ -83,6 +113,118 @@ void main() {
     ]);
   });
 
+  test('同时查询已启用片源，过滤空剧集，并保留部分成功的结果', () async {
+    final db = DatabaseService();
+    await db.saveSources([
+      ...db.getSources(),
+      const SourceConfig(
+        id: 'disabled',
+        name: '停用的片源',
+        baseUrl: 'https://disabled.test/api.php/provide/vod/',
+        enabled: false,
+      ),
+    ]);
+    Map<String, Object> entry(int id, int category, String stream) => {
+      'vod_id': id,
+      'vod_name': '同名作品',
+      'type_id': category,
+      'vod_area': '日本',
+      'vod_play_url': stream,
+    };
+    responses.lziResponse =
+        (request) async => _SourceResponses.listing(
+          request.queryParameters['t'] == '30'
+              ? [
+                entry(1, 30, r'第 1 集$https://example.test/one.m3u8'),
+                entry(2, 30, ''),
+              ]
+              : [],
+        );
+    var alternateFails = false;
+    responses.alternateResponse = (request) async {
+      if (alternateFails) {
+        throw DioException(
+          requestOptions: request,
+          type: DioExceptionType.connectionError,
+        );
+      }
+      return _SourceResponses.listing(
+        request.queryParameters['t'] == '40'
+            ? [
+              entry(1, 40, r'第 1 集$https://example.test/two.m3u8'),
+              entry(3, 40, r'第 1 集$invalid'),
+            ]
+            : [],
+      );
+    };
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final load = container.read(playbackSearchPageLoaderProvider);
+    final all = await load('同名作品');
+    expect(all.results.map((video) => video.id), ['1', '360zy:1']);
+    expect(all.results.map((video) => video.source), ['LziApi', '360zy']);
+    expect(all.failedSources, isEmpty);
+    expect(responses.requests.map((request) => request.uri.host).toSet(), {
+      'cj.lziapi.com',
+      '360zy.com',
+    });
+    alternateFails = true;
+    final partial = await load('同名作品');
+    expect(partial.results.single.id, '1');
+    expect(partial.failedSources, ['360zy']);
+  });
+
+  test('在线片库只汇总国产和日本动漫，并越过全是韩国作品的页', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final source = container.read(currentScraperProvider);
+    responses.lziResponse = (request) async {
+      final category = request.queryParameters['t']?.toString();
+      final page = request.queryParameters['pg'];
+      final rows = switch ((category, page)) {
+        ('29', 1) => [
+          {'vod_id': 10, 'vod_name': '国产番', 'type_id': 29, 'vod_area': '中国大陆'},
+        ],
+        ('30', 1) => [
+          {'vod_id': 20, 'vod_name': '韩国番', 'type_id': 30, 'vod_area': '韩国'},
+          {'vod_id': 21, 'vod_name': '产地未知', 'type_id': 30},
+        ],
+        ('30', 2) => [
+          {'vod_id': 22, 'vod_name': '日本番', 'type_id': 30, 'vod_area': '日本'},
+          {'vod_id': 23, 'vod_name': '美剧', 'type_id': 16, 'vod_area': '美国'},
+        ],
+        ('30', 3) => [
+          {
+            'vod_id': 24,
+            'vod_name': '合拍番',
+            'type_id': 30,
+            'vod_area': '法国 / 日本',
+          },
+        ],
+        _ => <Map<String, Object>>[],
+      };
+      return _SourceResponses.listing(rows);
+    };
+    expect(await source.getCategories(), ['全部', '国产动漫', '日本动漫']);
+    expect(
+      (await source.getHome()).map((video) => video.title),
+      unorderedEquals(['国产番', '日本番']),
+    );
+    expect((await source.getHome(page: 2)).single.title, '合拍番');
+    expect(await source.getByCategory('欧美动漫'), isEmpty);
+    expect((await source.getByCategory('日本动漫')).single.title, '日本番');
+
+    final search = searchProvider((session: Object(), mode: SearchMode.source));
+    container.listen(search, (_, _) {});
+    await container.read(search.notifier).search('番');
+    expect(
+      container.read(search).results.map((video) => video.title),
+      unorderedEquals(['国产番', '日本番']),
+    );
+    await container.read(search.notifier).loadMore();
+    expect(container.read(search).results.last.title, '合拍番');
+  });
+
   testWidgets('搜索失败后换源，用已提交的关键词重新查第一页', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(child: MaterialApp(home: SearchScreen())),
@@ -110,7 +252,11 @@ void main() {
 
   testWidgets('切源后丢弃上一个片源的迟到结果', (tester) async {
     final oldResponse = Completer<ResponseBody>();
-    responses.lziResponse = (_) => oldResponse.future;
+    responses.lziResponse =
+        (request) =>
+            request.queryParameters['t'] == '30'
+                ? oldResponse.future
+                : Future.value(_SourceResponses.listing([]));
     await tester.pumpWidget(
       const ProviderScope(child: MaterialApp(home: SearchScreen())),
     );
@@ -130,7 +276,7 @@ void main() {
 
     oldResponse.complete(
       _SourceResponses.listing([
-        {'vod_id': 28, 'vod_name': '旧片源迟到结果'},
+        {'vod_id': 28, 'vod_name': '旧片源迟到结果', 'type_id': 30, 'vod_area': '日本'},
       ]),
     );
     await tester.pumpAndSettle();
@@ -147,7 +293,7 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, '搜索'));
     await tester.pumpAndSettle();
     expect(find.text('片源：LziApi'), findsOneWidget);
-    expect(find.text('360zy'), findsOneWidget);
+    expect(find.text('360zy · 日本'), findsOneWidget);
     expect(find.text('来自 360zy'), findsOneWidget);
 
     responses.requests.clear();
@@ -156,7 +302,13 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, '搜索'));
     await tester.pumpAndSettle();
     expect(find.text('未找到相关动漫'), findsOneWidget);
-    expect(responses.requests.single.uri.host, 'cj.lziapi.com');
+    expect(responses.requests.map((request) => request.uri.host).toSet(), {
+      'cj.lziapi.com',
+    });
+    expect(
+      responses.requests.map((request) => request.queryParameters['t']).toSet(),
+      {'29', '30'},
+    );
   });
 
   testWidgets('开启回退时，源管理测试仍只验证被测试的片源', (tester) async {
@@ -220,7 +372,12 @@ void main() {
     );
     addTearDown(router.dispose);
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+      ProviderScope(
+        overrides: [
+          discoveryPageLoaderProvider.overrideWithValue(emptyDiscoveryPage),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
     );
     await tester.pumpAndSettle();
   }

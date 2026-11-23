@@ -83,5 +83,6 @@ final currentScraperProvider = Provider<BaseScraper>((ref) {
     fallbacks: ref.watch(enabledSourcesProvider),
     allowListFallback: ref.watch(sourceAutoFallbackProvider),
     allowDetailPlaybackSubstitution: false,
+    animeCatalogOnly: true,
   );
 });

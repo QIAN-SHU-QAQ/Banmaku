@@ -9,55 +9,66 @@ import '../../detail/widgets/subject_summary.dart';
 class SearchResultPreview extends ConsumerWidget {
   const SearchResultPreview({
     super.key,
-    this.result,
+    required this.result,
     this.scraper,
-    this.onOpenDetails,
+    required this.onOpenDetails,
+    required this.onClose,
   });
 
-  final VideoModel? result;
+  final VideoModel result;
   final BaseScraper? scraper;
-  final VoidCallback? onOpenDetails;
+  final VoidCallback onOpenDetails;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).colorScheme;
-    final selected = result;
-    final selectedScraper = scraper;
-    if (selected == null || selectedScraper == null) {
-      return ColoredBox(
-        color: colors.surfaceContainerLow,
-        child: Center(
-          child: Text(
-            '选择作品以预览',
-            style: TextStyle(color: colors.onSurfaceVariant),
-          ),
-        ),
-      );
-    }
-    final provider = sourceVideoDetailProvider((
-      scraper: selectedScraper,
-      id: selected.id,
-    ));
-    final detail = ref.watch(provider);
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final playbackSource = scraper;
+    final provider =
+        playbackSource == null
+            ? null
+            : sourceVideoDetailProvider((
+              scraper: playbackSource,
+              id: result.id,
+            ));
+    final detail = provider == null ? AsyncData(result) : ref.watch(provider);
 
     return ColoredBox(
       color: colors.surfaceContainerLow,
-      child: SingleChildScrollView(
-        primary: false,
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
-            child: Semantics(
-              container: true,
-              label: '作品预览',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 8, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text('作品预览', style: theme.textTheme.titleSmall),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '关闭预览',
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: onClose,
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: colors.outlineVariant),
+          Expanded(
+            child: SingleChildScrollView(
+              primary: false,
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
               child: detail.when(
                 skipLoadingOnRefresh: false,
                 loading:
                     () => Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SubjectSummary(video: selected),
+                        SubjectSummary(video: result),
                         const SizedBox(height: 16),
                         const LinearProgressIndicator(
                           semanticsLabel: '正在读取作品详情',
@@ -68,11 +79,14 @@ class SearchResultPreview extends ConsumerWidget {
                     (_, _) => Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SubjectSummary(video: selected),
+                        SubjectSummary(video: result),
                         const SizedBox(height: 20),
                         const Text('详情读取失败'),
                         TextButton(
-                          onPressed: () => ref.invalidate(provider),
+                          onPressed:
+                              provider == null
+                                  ? null
+                                  : () => ref.invalidate(provider),
                           child: const Text('重试详情'),
                         ),
                       ],
@@ -86,8 +100,12 @@ class SearchResultPreview extends ConsumerWidget {
                         video: video,
                         actions: FilledButton.icon(
                           onPressed: onOpenDetails,
-                          icon: const Icon(Icons.arrow_outward_rounded),
-                          label: const Text('查看详情'),
+                          icon: Icon(
+                            provider == null
+                                ? Icons.search_rounded
+                                : Icons.arrow_outward_rounded,
+                          ),
+                          label: Text(provider == null ? '查找片源' : '查看详情'),
                         ),
                       ),
                       if (description != null && description.isNotEmpty) ...[
@@ -107,13 +125,20 @@ class SearchResultPreview extends ConsumerWidget {
                           ),
                         ),
                       ],
+                      if (provider == null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          '作品资料来自 Bangumi',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   );
                 },
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

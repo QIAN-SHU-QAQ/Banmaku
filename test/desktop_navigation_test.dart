@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_play/app.dart';
+import 'package:nova_play/providers/home_provider.dart';
 import 'package:nova_play/providers/scraper_provider.dart';
 import 'fakes.dart';
 
@@ -14,12 +15,15 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [currentScraperProvider.overrideWithValue(FakeScraper())],
+          overrides: [
+            currentScraperProvider.overrideWithValue(FakeScraper()),
+            discoveryPageLoaderProvider.overrideWithValue(emptyDiscoveryPage),
+          ],
           child: const NovaPlayApp(),
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('NovaPlay'), findsOneWidget);
+      expect(find.text('Banmaku'), findsOneWidget);
       expect(find.text('发现'), findsWidgets);
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('收藏'));

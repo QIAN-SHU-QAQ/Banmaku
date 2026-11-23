@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'core/config/branding.dart';
 import 'core/config/routes.dart';
 import 'core/config/theme.dart';
 import 'core/window/main_window_chrome.dart';
@@ -67,7 +68,7 @@ class _NovaPlayAppState extends ConsumerState<NovaPlayApp>
     final themeMode = ref.watch(themeModeProvider);
 
     final app = MaterialApp.router(
-      title: 'NovaPlay',
+      title: appDisplayName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

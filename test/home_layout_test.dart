@@ -12,6 +12,7 @@ import 'package:nova_play/features/home/home_screen.dart';
 import 'package:nova_play/features/home/widgets/category_tabs.dart';
 import 'package:nova_play/models/video_model.dart';
 import 'package:nova_play/models/history_item.dart';
+import 'package:nova_play/providers/home_provider.dart';
 import 'package:nova_play/providers/history_provider.dart';
 import 'package:nova_play/providers/scraper_provider.dart';
 import 'package:nova_play/shared/widgets/poster_card.dart';
@@ -21,7 +22,6 @@ import 'fakes.dart';
 class LibraryScraper extends FakeScraper {
   final homePages = <int>[];
   bool failHome = false;
-  bool failCategories = false;
   bool empty = false;
   final covers = <int, String>{};
   Completer<VideoModel>? detailCompleter;
@@ -37,11 +37,10 @@ class LibraryScraper extends FakeScraper {
     ),
   );
 
-  @override
-  Future<List<String>> getCategories() async {
-    if (failCategories) throw StateError('测试分类加载失败');
-    return ['全部', '动画'];
-  }
+  Future<List<VideoModel>> browsePage(String category, {int page = 1}) =>
+      category == '全部'
+          ? getHome(page: page)
+          : getByCategory(category, page: page);
 
   @override
   Future<List<VideoModel>> getHome({int page = 1}) async {
@@ -54,7 +53,7 @@ class LibraryScraper extends FakeScraper {
   Future<List<VideoModel>> getByCategory(
     String category, {
     int page = 1,
-  }) async => videos;
+  }) async => page == 1 ? videos : [];
 
   /// R4：续播会先刷新详情，这里返回与历史快照对应的新剧集地址。
   @override
@@ -125,7 +124,16 @@ Future<GoRouter> pumpHome(
       GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
       GoRoute(
         path: '/search',
-        builder: (_, __) => const Scaffold(body: Text('搜索页面')),
+        builder: (_, state) {
+          final params = state.uri.queryParameters;
+          return Scaffold(
+            body: Text(
+              params.isEmpty
+                  ? '搜索页面'
+                  : '${params['mode']} / ${params['from']} / ${params['q']}',
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/schedule',
@@ -154,6 +162,7 @@ Future<GoRouter> pumpHome(
     ProviderScope(
       overrides: [
         currentScraperProvider.overrideWithValue(scraper),
+        discoveryPageLoaderProvider.overrideWithValue(scraper.browsePage),
         historyProvider.overrideWith((ref) => SeededHistory(history)),
         if (originalDetail != null)
           originalSourceDetailProvider.overrideWithValue(originalDetail),
@@ -198,6 +207,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('时间表页面'), findsOneWidget);
+  });
+
+  testWidgets('发现页先打开作品资料，再用片名查找片源', (tester) async {
+    final router = await pumpHome(
+      tester,
+      LibraryScraper(),
+      const Size(1280, 800),
+    );
+    await tester.tap(find.text('作品 0'));
+    await tester.pumpAndSettle();
+    expect(find.text('查找片源'), findsOneWidget);
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/');
+    await tester.tap(find.text('查找片源'));
+    await tester.pumpAndSettle();
+    expect(find.text('source / catalog / 作品 0'), findsOneWidget);
   });
 
   for (final size in [const Size(616, 600), const Size(1728, 1080)]) {
@@ -245,7 +269,8 @@ void main() {
         await tester.tap(find.text('查看详情'));
         await tester.pumpAndSettle();
 
-        expect(find.text('详情 video-2'), findsOneWidget);
+        expect(find.widgetWithText(Dialog, '作品 2'), findsOneWidget);
+        expect(find.text('查找片源'), findsOneWidget);
         expect(router.routerDelegate.currentConfiguration.uri.query, isEmpty);
       },
     );
@@ -263,18 +288,22 @@ void main() {
     expect(find.text('旧片源名'), findsNothing);
   });
 
-  testWidgets('Refreshing an available source also retries its category list', (
-    tester,
-  ) async {
-    final scraper = LibraryScraper()..failCategories = true;
-    await pumpHome(tester, scraper, const Size(1120, 720));
-    expect(find.byType(CategoryTabs), findsNothing);
-
-    scraper.failCategories = false;
-    await tester.tap(find.byTooltip('刷新'));
-    await tester.pumpAndSettle();
-    expect(find.widgetWithText(CategoryTabs, '动画'), findsOneWidget);
-  });
+  testWidgets(
+    'Discovery categories and results are independent of playback source',
+    (tester) async {
+      final scraper = LibraryScraper();
+      await pumpHome(tester, scraper, const Size(1120, 720));
+      expect(find.widgetWithText(CategoryTabs, '国产动漫'), findsOneWidget);
+      expect(find.widgetWithText(CategoryTabs, '日本动漫'), findsOneWidget);
+      expect(find.textContaining('片源：'), findsNothing);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(HomeScreen)),
+      );
+      container.read(sourceVersionProvider.notifier).state++;
+      await tester.pumpAndSettle();
+      expect(scraper.homePages, [1]);
+    },
+  );
 
   testWidgets('Empty feed offers retry', (tester) async {
     final scraper = LibraryScraper()..empty = true;
@@ -538,7 +567,7 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('作品 0'));
       await tester.pumpAndSettle();
-      expect(find.text('详情 video-0'), findsOneWidget);
+      expect(find.widgetWithText(Dialog, '作品 0'), findsOneWidget);
     });
   }
 
@@ -547,7 +576,7 @@ void main() {
   ) async {
     final scraper = LibraryScraper();
     await pumpHome(tester, scraper, const Size(1120, 720));
-    await tester.tap(find.text('动画'));
+    await tester.tap(find.text('国产动漫'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
     await tester.pumpAndSettle();
@@ -559,7 +588,7 @@ void main() {
   ) async {
     final scraper = LibraryScraper()..failHome = true;
     await pumpHome(tester, scraper, const Size(1120, 720));
-    expect(find.text('加载失败'), findsOneWidget);
+    expect(find.text('作品库加载失败'), findsOneWidget);
     scraper.failHome = false;
     await tester.tap(find.byTooltip('刷新'));
     await tester.pumpAndSettle();

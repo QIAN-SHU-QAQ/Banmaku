@@ -1,16 +1,21 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../models/video_model.dart';
 import '../cover_url.dart';
 
 /// Promotes the first catalog work whose cover can actually be displayed.
 class DiscoveryHero extends StatefulWidget {
-  const DiscoveryHero({super.key, required this.videos, required this.padding});
+  const DiscoveryHero({
+    super.key,
+    required this.videos,
+    required this.padding,
+    required this.onOpen,
+  });
 
   final List<VideoModel> videos;
   final EdgeInsets padding;
+  final ValueChanged<VideoModel> onOpen;
 
   @override
   State<DiscoveryHero> createState() => _DiscoveryHeroState();
@@ -39,7 +44,11 @@ class _DiscoveryHeroState extends State<DiscoveryHero> {
         imageBuilder:
             (context, image) => Padding(
               padding: widget.padding,
-              child: _HeroBanner(video: video, cover: image),
+              child: _HeroBanner(
+                video: video,
+                cover: image,
+                onOpen: () => widget.onOpen(video),
+              ),
             ),
       );
     }
@@ -48,10 +57,15 @@ class _DiscoveryHeroState extends State<DiscoveryHero> {
 }
 
 class _HeroBanner extends StatelessWidget {
-  const _HeroBanner({required this.video, required this.cover});
+  const _HeroBanner({
+    required this.video,
+    required this.cover,
+    required this.onOpen,
+  });
 
   final VideoModel video;
   final ImageProvider cover;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -172,10 +186,7 @@ class _HeroBanner extends StatelessWidget {
                           ],
                           const SizedBox(height: 20),
                           FilledButton.icon(
-                            onPressed:
-                                () => context.push(
-                                  '/detail/${Uri.encodeComponent(video.id)}',
-                                ),
+                            onPressed: onOpen,
                             icon: const Icon(
                               Icons.arrow_outward_rounded,
                               size: 17,

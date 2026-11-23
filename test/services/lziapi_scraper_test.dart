@@ -213,6 +213,81 @@ void main() {
     expect(adapter.requests.last.queryParameters, isNot(contains('t')));
     expect(adapter.requests.length, 3);
   });
+  test('父分类汇总有内容的子分类，分页使用相同来源和上游页码', () async {
+    final custom = LziApiScraper(
+      primary: SourceConfig.defaults().last,
+      fallbacks: [],
+    );
+    respond((request) {
+      if (request.queryParameters['ac'] == 'list') {
+        return {
+          'code': 1,
+          'class': [
+            {'type_id': 4, 'type_name': '动漫', 'type_pid': 0},
+            {'type_id': 38, 'type_name': '国产动漫', 'type_pid': '4'},
+            {'type_id': '39', 'type_name': '日韩动漫', 'type_pid': 4},
+            {'type_id': 40, 'type_name': '剧场版', 'type_pid': 39},
+            {'type_id': 3, 'type_name': '综艺', 'type_pid': 0},
+            {'type_id': 37, 'type_name': '欧美综艺', 'type_pid': 3},
+          ],
+        };
+      }
+      final category = request.queryParameters['t'];
+      final page = request.queryParameters['pg'];
+      switch ((category, page)) {
+        case ('38', 1):
+          return _list([
+            {..._video(380), 'type_id': 38, 'vod_time': '2026-11-23 13:00:00'},
+          ]);
+        case ('39', 1):
+          return _list([
+            {..._video(390), 'type_id': 39, 'vod_time': '2026-11-23 15:00:00'},
+          ]);
+        case ('40', 2):
+          return _list([_video(402)]);
+        case ('37', _):
+          fail('请求了无关分类');
+        default:
+          return _list([]);
+      }
+    });
+
+    expect((await custom.getByCategory('动漫')).map((video) => video.id), [
+      '360zy:390',
+      '360zy:380',
+    ]);
+    expect((await custom.getByCategory('动漫', page: 2)).single.id, '360zy:402');
+    expect(await custom.getByCategory('动漫', page: 3), isEmpty);
+    expect((await custom.getByCategory('国产动漫')).single.id, '360zy:380');
+    expect(
+      adapter.requests.every((req) => req.uri.host == '360zy.com'),
+      isTrue,
+    );
+  });
+
+  test('上游已经汇总子分类时沿用其分页', () async {
+    final custom = LziApiScraper(
+      primary: SourceConfig.defaults().last,
+      fallbacks: [],
+    );
+    respond((request) {
+      if (request.queryParameters['ac'] == 'list') {
+        return {
+          'code': 1,
+          'class': [
+            {'type_id': 4, 'type_name': '动漫', 'type_pid': 0},
+            {'type_id': 38, 'type_name': '国产动漫', 'type_pid': 4},
+          ],
+        };
+      }
+      expect(request.queryParameters['t'], '4');
+      return _list([
+        {..._video(381), 'type_id': 38},
+      ]);
+    });
+    expect((await custom.getByCategory('动漫')).single.id, '360zy:381');
+    expect(adapter.requests, hasLength(2));
+  });
   test('带来源 ID 的详情只请求对应源', () async {
     respond((o) {
       expect(o.uri.host, '360zy.com');

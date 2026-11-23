@@ -10,11 +10,10 @@ import '../../models/video_model.dart';
 import '../../providers/home_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/scraper_provider.dart';
-import '../../providers/video_provider.dart';
 import '../../services/database_service.dart';
 import '../../shared/widgets/desktop_page_header.dart';
 import '../../shared/widgets/poster_card.dart';
-import '../../shared/widgets/source_picker.dart';
+import '../search/widgets/catalog_work_dialog.dart';
 import 'widgets/category_tabs.dart';
 import 'widgets/continue_watching_card.dart';
 import 'widgets/discovery_hero.dart';
@@ -34,20 +33,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    ref.listenManual(categoriesProvider, (_, next) {
-      final choices = next.asData?.value;
-      if (choices == null) return;
-      final selected = ref.read(selectedCategoryProvider);
-      if (selected == '全部' || choices.contains(selected)) return;
-      Future.microtask(() {
-        if (!mounted ||
-            ref.read(selectedCategoryProvider) != selected ||
-            !identical(ref.read(categoriesProvider), next)) {
-          return;
-        }
-        ref.read(selectedCategoryProvider.notifier).state = '全部';
-      });
-    });
   }
 
   @override
@@ -59,28 +44,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _onScroll() {
     if (_scrollController.position.extentAfter >= 200) return;
     final category = ref.read(selectedCategoryProvider);
-    if (category == '全部') {
-      ref.read(videoListProvider.notifier).loadMore();
-    } else {
-      ref.read(categoryFeedProvider(category).notifier).loadMore();
-    }
+    ref.read(categoryFeedProvider(category).notifier).loadMore();
   }
 
-  Future<void> _refresh() async {
-    ref.invalidate(categoriesProvider);
+  Future<void> _refresh() {
     final category = ref.read(selectedCategoryProvider);
-    if (category == '全部') {
-      await ref.read(videoListProvider.notifier).refresh();
-    } else {
-      await ref.read(categoryFeedProvider(category).notifier).refresh();
-    }
+    return ref.read(categoryFeedProvider(category).notifier).refresh();
   }
 
   @override
   Widget build(BuildContext context) {
     final selectedCategory = ref.watch(selectedCategoryProvider);
-    final categories = ref.watch(categoriesProvider);
-    final videoState = ref.watch(videoListProvider);
+    final state = ref.watch(categoryFeedProvider(selectedCategory));
     final history = ref.watch(historyProvider);
     final colors = Theme.of(context).colorScheme;
     return DesktopPage(
@@ -100,7 +75,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             foregroundColor: colors.onPrimaryContainer,
           ),
         ),
-        const SourcePicker(),
         IconButton(
           tooltip: '刷新',
           onPressed: _refresh,
@@ -120,10 +94,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               slivers: [
                 SliverToBoxAdapter(
                   child:
-                      all && videoState.videos.isNotEmpty
+                      all && state.videos.isNotEmpty
                           ? DiscoveryHero(
-                            videos: videoState.videos,
+                            videos: state.videos,
                             padding: EdgeInsets.fromLTRB(inset, 14, inset, 4),
+                            onOpen: (video) => showCatalogWork(context, video),
                           )
                           : const SizedBox.shrink(),
                 ),
@@ -144,33 +119,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       children: [
                         _sectionTitle(context, '片库'),
                         const SizedBox(height: 8),
-                        categories.maybeWhen(
-                          data:
-                              (categories) => CategoryTabs(
-                                categories:
-                                    categories.isEmpty
-                                        ? const ['全部']
-                                        : categories,
-                                selectedCategory: selectedCategory,
-                                onCategorySelected: (category) {
-                                  ref
-                                      .read(selectedCategoryProvider.notifier)
-                                      .state = category;
-                                  if (_scrollController.hasClients) {
-                                    _scrollController.jumpTo(0);
-                                  }
-                                },
-                              ),
-                          orElse: () => const SizedBox.shrink(),
+                        CategoryTabs(
+                          categories: discoveryCategories,
+                          selectedCategory: selectedCategory,
+                          onCategorySelected: (category) {
+                            ref.read(selectedCategoryProvider.notifier).state =
+                                category;
+                            if (_scrollController.hasClients) {
+                              _scrollController.jumpTo(0);
+                            }
+                          },
                         ),
                       ],
                     ),
                   ),
                 ),
-                if (all)
-                  _feed(videoState, inset)
-                else
-                  _category(selectedCategory, inset),
+                _feed(state, inset),
                 const SliverToBoxAdapter(child: SizedBox(height: 28)),
               ],
             );
@@ -252,7 +216,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _feed(VideoListState state, double inset) {
+  Widget _feed(CategoryFeedState state, double inset) {
+    final notifier = ref.read(categoryFeedProvider(state.category).notifier);
     if (state.isLoading && state.videos.isEmpty) {
       return const SliverFillRemaining(
         hasScrollBody: false,
@@ -260,51 +225,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
     if (state.error != null && state.videos.isEmpty) {
-      return _message('加载失败', canSwitchSource: true, onRetry: _refresh);
-    }
-    if (state.videos.isEmpty) return _message('暂无内容', onRetry: _refresh);
-    return SliverMainAxisGroup(
-      slivers: [
-        _grid(state.videos, inset),
-        if (state.isLoading)
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          )
-        else if (state.error != null)
-          SliverToBoxAdapter(
-            child: Center(
-              child: TextButton(
-                onPressed:
-                    () => ref.read(videoListProvider.notifier).loadMore(),
-                child: const Text('加载更多失败，重试'),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _category(String category, double inset) {
-    final state = ref.watch(categoryFeedProvider(category));
-    final notifier = ref.read(categoryFeedProvider(category).notifier);
-    if (state.isLoading && state.videos.isEmpty) {
-      return const SliverFillRemaining(
-        hasScrollBody: false,
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (state.error != null && state.videos.isEmpty) {
-      return _message(
-        '分类加载失败',
-        canSwitchSource: true,
-        onRetry: notifier.loadMore,
-      );
+      return _message('作品库加载失败', onRetry: notifier.loadMore);
     }
     if (state.videos.isEmpty) {
-      return _message('该分类暂无内容', onRetry: notifier.loadMore);
+      return _message('暂无内容', onRetry: notifier.refresh);
     }
     return SliverMainAxisGroup(
       slivers: [
@@ -330,7 +254,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _grid(List<VideoModel> videos, double inset) {
-    final active = ref.watch(activeSourceConfigProvider);
     return SliverPadding(
       padding: EdgeInsets.symmetric(horizontal: inset),
       sliver: SliverLayoutBuilder(
@@ -344,12 +267,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               delegate: SliverChildBuilderDelegate((context, index) {
                 final video = videos[index];
-                final detail = '/detail/${Uri.encodeComponent(video.id)}';
                 return VideoCard(
                   video: video,
-                  showSource: isFromOtherSource(video, active),
-                  onTap: () => context.push(detail),
-                  onPlay: () => context.push('$detail?play=1'),
+                  onTap: () => showCatalogWork(context, video),
                 );
               }, childCount: videos.length),
             ),
@@ -357,11 +277,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _message(
-    String title, {
-    bool canSwitchSource = false,
-    required VoidCallback onRetry,
-  }) {
+  Widget _message(String title, {required VoidCallback onRetry}) {
     return SliverFillRemaining(
       hasScrollBody: false,
       child: Center(
@@ -372,14 +288,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               Text(title, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  OutlinedButton(onPressed: onRetry, child: const Text('重试')),
-                  if (canSwitchSource) const SourcePicker(label: '切换片源'),
-                ],
-              ),
+              OutlinedButton(onPressed: onRetry, child: const Text('重试')),
             ],
           ),
         ),

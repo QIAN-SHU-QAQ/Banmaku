@@ -38,23 +38,22 @@ void main() {
       overrides: [currentScraperProvider.overrideWithValue(scraper)],
     );
     addTearDown(container.dispose);
+    final search = searchProvider((session: Object(), mode: SearchMode.source));
+    container.listen(search, (_, _) {});
 
-    await container.read(searchProvider.notifier).search('测试');
+    await container.read(search.notifier).search('测试');
     await _settle();
-    expect(container.read(searchProvider).results.map((v) => v.id), ['s1']);
-    expect(container.read(searchProvider).hasMore, isTrue);
+    expect(container.read(search).results.map((v) => v.id), ['s1']);
+    expect(container.read(search).hasMore, isTrue);
 
-    await container.read(searchProvider.notifier).loadMore();
+    await container.read(search.notifier).loadMore();
     await _settle();
-    expect(container.read(searchProvider).results.map((v) => v.id), [
-      's1',
-      's2',
-    ]);
+    expect(container.read(search).results.map((v) => v.id), ['s1', 's2']);
     expect(scraper.requestedPages, [1, 2]);
 
-    await container.read(searchProvider.notifier).loadMore();
+    await container.read(search.notifier).loadMore();
     await _settle();
-    expect(container.read(searchProvider).hasMore, isFalse);
+    expect(container.read(search).hasMore, isFalse);
     expect(scraper.requestedPages, [1, 2, 3]);
   });
 
@@ -67,13 +66,15 @@ void main() {
       overrides: [currentScraperProvider.overrideWithValue(scraper)],
     );
     addTearDown(container.dispose);
+    final search = searchProvider((session: Object(), mode: SearchMode.source));
+    container.listen(search, (_, _) {});
 
-    await container.read(searchProvider.notifier).search('第一');
+    await container.read(search.notifier).search('第一');
     await _settle();
-    await container.read(searchProvider.notifier).search('第二');
+    await container.read(search.notifier).search('第二');
     await _settle();
 
-    final state = container.read(searchProvider);
+    final state = container.read(search);
     expect(state.results.length, 1);
     expect(state.page, 2);
     expect(scraper.requestedPages.where((p) => p == 1).length, 2);
