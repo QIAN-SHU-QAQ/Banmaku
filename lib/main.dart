@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
@@ -12,7 +14,9 @@ import 'core/config/branding.dart';
 import 'core/network/windows_proxy.dart';
 import 'core/window/player_window_bridge.dart';
 import 'features/player/player_window.dart';
+import 'providers/download_provider.dart';
 import 'services/database_service.dart';
+import 'services/portable_profile.dart';
 import 'services/prefs_bridge.dart';
 
 /// 主窗口与独立播放进程共用同一个入口。
@@ -23,9 +27,39 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   installWindowsProxy();
   MediaKit.ensureInitialized();
-  await DatabaseService().init();
-
   final playerArgIndex = args.indexOf('--player');
+  final portable =
+      Platform.isWindows
+          ? PortableProfile.detect(Platform.resolvedExecutable)
+          : null;
+  if (portable != null) {
+    try {
+      if (playerArgIndex < 0) await _initializePortableProfile(portable);
+      SharedPreferencesStorePlatform.instance = PortablePreferences(
+        portable.preferences,
+      );
+      await DatabaseService().init(journalDirectory: portable.journals);
+    } catch (error) {
+      runApp(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  '无法打开 Banmaku 的便携数据。请检查文件夹是否可写或是否有足够空间，然后重新启动。\n\n$error',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+  } else {
+    await DatabaseService().init();
+  }
+
   if (playerArgIndex >= 0) {
     PlayerWindowBridge.isPlayerWindow = true;
     var arguments = <String, dynamic>{};
@@ -43,10 +77,14 @@ Future<void> main(List<String> args) async {
     // 配置写入统一交给主进程，避免两个进程互相覆盖整份配置。
     // 端点文件让旧播放器在主窗口重启后自动发现新端口。
     final bridgePort = arguments['bridgePort'];
-    if (bridgePort is int && bridgePort > 0) {
-      final endpointFile = await _bridgeEndpointFile();
+    if (portable != null || (bridgePort is int && bridgePort > 0)) {
+      final endpointFile =
+          portable?.bridgeEndpoint ?? await _bridgeEndpointFile();
       DatabaseService().attachBridge(
-        PrefsBridgeClient(bridgePort, endpointFile: endpointFile),
+        PrefsBridgeClient(
+          bridgePort is int ? bridgePort : 0,
+          endpointFile: endpointFile,
+        ),
       );
     }
 
@@ -63,7 +101,7 @@ Future<void> main(List<String> args) async {
   // 1) 先回放播放器进程离线积压的操作（主窗口关闭期间产生）；
   // 2) 再启动配置桥，接收运行中的播放器进程发来的标量设置/语义操作；
   // 3) 配置桥启动后会把新端点写入端点文件，旧播放器重试时据此重连。
-  final endpointFile = await _bridgeEndpointFile();
+  final endpointFile = portable?.bridgeEndpoint ?? await _bridgeEndpointFile();
   await DatabaseService().flushPendingJournals();
   await PrefsBridgeServer.start(
     onSet: (key, value) => DatabaseService().applyRemoteSet(key, value),
@@ -92,6 +130,10 @@ Future<void> main(List<String> args) async {
 
   runApp(
     ProviderScope(
+      overrides: [
+        if (portable != null)
+          portableDownloadsProvider.overrideWithValue(portable.downloads),
+      ],
       child: NovaPlayApp(desktopWindowManager: desktopWindowManager),
     ),
   );
@@ -101,6 +143,18 @@ Future<void> main(List<String> args) async {
     await desktopWindowManager.show();
     await desktopWindowManager.focus();
   }
+}
+
+Future<void> _initializePortableProfile(PortableProfile profile) async {
+  await profile.journals.create(recursive: true);
+  if (!await profile.importRequest.exists()) return;
+  final support = await getApplicationSupportDirectory();
+  final documents = await getApplicationDocumentsDirectory();
+  await profile.importLegacy(
+    File(p.join(support.path, 'shared_preferences.json')),
+    Directory(p.join(documents.path, 'NovaPlay', 'Downloads')),
+  );
+  await profile.importRequest.delete();
 }
 
 /// 主窗口与播放器进程共用的配置桥端点文件路径。

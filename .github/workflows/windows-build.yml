@@ -2,7 +2,7 @@ name: windows-build
 
 # Windows 预览版构建与打包（R8）。
 # - PR 与手动触发的构建都只读权限、不持久化 Git 凭据、不使用共享缓存；
-# - 构建完成后上传 ZIP + SHA-256 artifact；
+# - 构建完成后上传便携 EXE、ZIP 和对应的 SHA-256；
 # - 只有手动触发并勾选 create_draft_release 时，才由独立的写权限 job
 #   下载 artifact 创建 draft Release（该 job 不检出/执行 PR 代码）。
 
@@ -10,12 +10,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "版本号（用于 ZIP 与 Release 标签，例如 1.0.0）"
+        description: "版本号（用于安装包、ZIP 与 Release 标签，例如 1.0.0）"
         required: false
         default: ""
         type: string
       create_draft_release:
-        description: "创建 draft Release 并上传 ZIP + SHA-256"
+        description: "创建 draft Release 并上传安装包、ZIP 和校验文件"
         required: false
         default: false
         type: boolean
@@ -88,24 +88,27 @@ jobs:
       - name: Build Windows release
         run: flutter build windows --release --no-pub
 
-      - name: Package portable ZIP
+      - name: Package portable installer and ZIP
         shell: pwsh
+        env:
+          BANMAKU_PACKAGE_VERSION: ${{ inputs.version }}
         run: |
-          $version = "${{ github.event.inputs.version }}"
-          if ([string]::IsNullOrWhiteSpace($version)) { $version = "" }
-          ./scripts/package-portable.ps1 -Version $version
+          ./scripts/package-portable.ps1 -Version $env:BANMAKU_PACKAGE_VERSION -IncludeInstaller
 
       - name: Show package result
         shell: pwsh
         run: |
-          Get-ChildItem dist | Format-Table Name, Length
+          Get-ChildItem dist -File | Format-Table Name, Length
           Get-Content dist/*.sha256
 
-      - name: Upload portable ZIP
+      - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
-          name: NovaPlay-windows-preview
-          path: dist/*
+          name: Banmaku-windows-preview
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.sha256
           if-no-files-found: error
 
   publish-draft:
@@ -120,15 +123,16 @@ jobs:
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4
         with:
-          name: NovaPlay-windows-preview
+          name: Banmaku-windows-preview
           path: artifacts
 
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BANMAKU_PACKAGE_VERSION: ${{ inputs.version }}
         shell: bash
         run: |
-          version="${{ github.event.inputs.version }}"
+          version="$BANMAKU_PACKAGE_VERSION"
           if [ -z "$version" ]; then
             tag="preview-${{ github.run_number }}"
           else
@@ -138,5 +142,5 @@ jobs:
             --draft \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "NovaPlay $tag (Windows preview)" \
-            --notes "Windows 10/11 x64 便携预览包（ZIP + SHA-256）。运行要求与已知限制见包内 使用说明.md；未做代码签名，请先核对哈希。此包由 CI 构建，干净机器验收仍需人工执行。"
+            --title "Banmaku $tag (Windows preview)" \
+            --notes "Windows x64 便携安装包、ZIP 和 SHA-256。目标验收系统为 Windows 11 x64。使用说明在包内。此包由 CI 构建，发布前需验收。"
