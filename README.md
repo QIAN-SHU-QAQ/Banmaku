@@ -2,7 +2,7 @@
 
 Banmaku 是用 Flutter 和 media_kit 编写的 Windows 动漫聚合播放器。可以从 Bangumi 作品库发现和搜索动画，按作品查找片源、选集播放，也能收藏作品并从观看历史接着看。
 
-**发布状态（2026-11-24）** `v1.0.0-preview.2` 已公开发布。本版通过 Windows 11 x64 沙盒验收和开发机在线播放抽查，发布页提供便携 ZIP 和 SHA-256 校验文件。[下载 Preview 2](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/tag/v1.0.0-preview.2) · [PR #18](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/18)
+**Windows x64 下载 · Preview 3** [便携安装包（EXE）](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/download/v1.0.0-preview.3/Banmaku-1.0.0-preview.3-windows-x64-portable.exe) · [ZIP 解压版](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/download/v1.0.0-preview.3/Banmaku-1.0.0-preview.3-windows-x64.zip) · [发布说明与 SHA-256 校验文件](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/tag/v1.0.0-preview.3)
 
 <details>
 <summary>查看早期版本界面（2026-10-30）</summary>
@@ -41,15 +41,12 @@ Windows 实机确认在线发现、搜索、详情、收藏、选集、播放和
 
 ## Windows 预览版安装
 
-1. 如果电脑尚未安装 Microsoft Visual C++ v14 x64 运行库，请先安装微软官方组件。[下载 VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe)
-2. 下载 `Banmaku-1.0.0-preview.2-windows-x64.zip` 和同名 `.sha256` 文件，校验后解压。[下载 Preview 2](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/tag/v1.0.0-preview.2)
-3. 运行解压目录中的 `nova_play.exe`，保留同目录的 DLL 和 `data/`。路径可以包含中文和空格。[完整使用说明](docs/preview-usage.md)
+- **便携安装包（EXE）**。校验后双击，选择可写目录，解压完成后从 `app\nova_play.exe` 启动。观看历史、收藏、设置和下载保存在 `UserData`，可以随整个文件夹移动。更新时先退出主窗口和所有播放器，再选择原目录。
+- **ZIP 解压版**。校验后解压，运行目录中的 `nova_play.exe`。ZIP 继续使用当前 Windows 用户配置，可以读取已有的观看历史、收藏和设置。
 
-当前便携包的验收目标是 Windows 11 x64。更新时先退出主窗口和所有播放器，再把新 ZIP 解压到新目录并启动。Banmaku 从 `%APPDATA%\com.novaplay\nova_play` 读取已有的观看历史、收藏、设置和自定义片源。
+Preview 3 随包提供所需的 VC++ DLL。当前验收覆盖 Windows 11 x64，安装包未签名。[完整使用说明](docs/preview-usage.md)
 
 ## 现在能做什么
-
-以下功能以 Preview 2 候选版为准。
 
 - 发现和作品搜索使用 Bangumi 动画作品库。发现页可按「国产动漫」和「日本动漫」浏览，点开作品可预览资料。分类与搜索结果都支持滚动加载。
 - 播放在线视频，切换剧集、倍速、音量和窗口全屏；播放失败时可重试。**视频在独立的播放窗口中打开**，关掉视频窗口不会退出主界面，可以边看边浏览；可在设置里开启「自动播放下一集」并配置默认倍速。
