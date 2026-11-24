@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/play_launcher.dart';
 import '../../models/history_item.dart';
 import '../../providers/history_provider.dart';
-import '../../providers/scraper_provider.dart';
+import '../../shared/widgets/desktop_page_header.dart';
 import '../../shared/widgets/wide_media_card.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -13,26 +13,24 @@ class HistoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(historyProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('历史'),
-        actions: [
-          TextButton(
-            onPressed:
-                history.isEmpty ? null : () => _confirmClear(context, ref),
-            child: const Text('清除'),
-          ),
-        ],
-      ),
-      body:
+    return DesktopPage(
+      title: '历史',
+      actions: [
+        TextButton(
+          onPressed: history.isEmpty ? null : () => _confirmClear(context, ref),
+          child: const Text('清除'),
+        ),
+      ],
+      child:
           history.isEmpty
               ? _buildEmptyState(context)
               : Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 920),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(24),
                     itemCount: history.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder:
                         (context, index) =>
                             _buildHistoryCard(context, ref, history[index]),
@@ -77,20 +75,8 @@ class HistoryScreen extends ConsumerWidget {
       subtitle: item.episodeTitle ?? '已看 ${_formatDuration(item.position)}',
       meta: _formatTime(item.watchedAt),
       progress: item.progress > 0 ? item.progress : null,
-      onTap:
-          () => launchHistoryResume(
-            context,
-            item,
-            fetchDetail:
-                () => ref.read(currentScraperProvider).getDetail(item.videoId),
-          ),
-      onResume:
-          () => launchHistoryResume(
-            context,
-            item,
-            fetchDetail:
-                () => ref.read(currentScraperProvider).getDetail(item.videoId),
-          ),
+      onTap: () => resumeFromOriginalSource(context, ref, item),
+      onResume: () => resumeFromOriginalSource(context, ref, item),
       onRemove: () => ref.read(historyProvider.notifier).remove(item.videoId),
     );
   }

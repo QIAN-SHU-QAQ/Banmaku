@@ -1,14 +1,18 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nova_play/core/config/theme.dart';
 import 'package:nova_play/features/home/home_screen.dart';
 import 'package:nova_play/features/home/widgets/category_tabs.dart';
 import 'package:nova_play/models/video_model.dart';
 import 'package:nova_play/models/history_item.dart';
+import 'package:nova_play/providers/home_provider.dart';
 import 'package:nova_play/providers/history_provider.dart';
 import 'package:nova_play/providers/scraper_provider.dart';
 import 'package:nova_play/shared/widgets/poster_card.dart';
@@ -19,16 +23,24 @@ class LibraryScraper extends FakeScraper {
   final homePages = <int>[];
   bool failHome = false;
   bool empty = false;
+  final covers = <int, String>{};
   Completer<VideoModel>? detailCompleter;
 
   List<VideoModel> get videos => List.generate(
     24,
-    (i) =>
-        VideoModel(id: 'video-$i', title: '作品 $i', year: '2026', genre: '动画'),
+    (i) => VideoModel(
+      id: 'video-$i',
+      title: '作品 $i',
+      cover: covers[i],
+      year: '2026',
+      genre: '动画',
+    ),
   );
 
-  @override
-  Future<List<String>> getCategories() async => ['全部', '动画'];
+  Future<List<VideoModel>> browsePage(String category, {int page = 1}) =>
+      category == '全部'
+          ? getHome(page: page)
+          : getByCategory(category, page: page);
 
   @override
   Future<List<VideoModel>> getHome({int page = 1}) async {
@@ -41,10 +53,9 @@ class LibraryScraper extends FakeScraper {
   Future<List<VideoModel>> getByCategory(
     String category, {
     int page = 1,
-  }) async => videos;
+  }) async => page == 1 ? videos : [];
 
   /// R4：续播会先刷新详情，这里返回与历史快照对应的新剧集地址。
-  @override
   @override
   Future<VideoModel> getDetail(String url) async {
     final completer = detailCompleter;
@@ -100,6 +111,9 @@ Future<GoRouter> pumpHome(
   LibraryScraper scraper,
   Size size, {
   List<HistoryItem> history = const [],
+  ThemeData? theme,
+  OriginalSourceDetail? originalDetail,
+  ValueChanged<Map<String, dynamic>>? onPlayback,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -110,7 +124,20 @@ Future<GoRouter> pumpHome(
       GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
       GoRoute(
         path: '/search',
-        builder: (_, __) => const Scaffold(body: Text('搜索页面')),
+        builder: (_, state) {
+          final params = state.uri.queryParameters;
+          return Scaffold(
+            body: Text(
+              params.isEmpty
+                  ? '搜索页面'
+                  : '${params['mode']} / ${params['from']} / ${params['q']}',
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/schedule',
+        builder: (_, __) => const Scaffold(body: Text('时间表页面')),
       ),
       GoRoute(
         path: '/detail/:id',
@@ -122,6 +149,7 @@ Future<GoRouter> pumpHome(
         path: '/player',
         builder: (_, state) {
           final extra = state.extra! as Map<String, dynamic>;
+          onPlayback?.call(extra);
           return Scaffold(
             body: Text('续播 ${extra['videoId']} ${extra['startAt']}'),
           );
@@ -134,16 +162,149 @@ Future<GoRouter> pumpHome(
     ProviderScope(
       overrides: [
         currentScraperProvider.overrideWithValue(scraper),
+        discoveryPageLoaderProvider.overrideWithValue(scraper.browsePage),
         historyProvider.overrideWith((ref) => SeededHistory(history)),
+        if (originalDetail != null)
+          originalSourceDetailProvider.overrideWithValue(originalDetail),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(routerConfig: router, theme: theme),
     ),
   );
   await tester.pumpAndSettle();
   return router;
 }
 
+HistoryItem _sameEpisodeHistory(String videoId, String source, int seconds) =>
+    HistoryItem(
+      videoId: videoId,
+      title: '同名作品',
+      sourceId: source,
+      episodeIndex: 0,
+      position: Duration(seconds: seconds),
+      duration: const Duration(minutes: 24),
+      watchedAt: DateTime(2026),
+      episodes: [
+        EpisodeModel(id: 'ep', title: '第 1 集', url: 'https://fake.local/ep'),
+      ],
+    );
+
+Future<void> _tabTo(WidgetTester tester, Finder label) async {
+  for (var step = 0; step < 8; step++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    if (Focus.of(tester.element(label)).hasPrimaryFocus) return;
+  }
+  fail('Tab did not focus the card containing $label');
+}
+
 void main() {
+  testWidgets('The discovery header opens the new anime schedule', (
+    tester,
+  ) async {
+    await pumpHome(tester, LibraryScraper(), const Size(616, 600));
+
+    await tester.tap(find.text('新番时间表'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('时间表页面'), findsOneWidget);
+  });
+
+  testWidgets('发现页先打开作品资料，再用片名查找片源', (tester) async {
+    final router = await pumpHome(
+      tester,
+      LibraryScraper(),
+      const Size(1280, 800),
+    );
+    await tester.tap(find.text('作品 0'));
+    await tester.pumpAndSettle();
+    expect(find.text('查找片源'), findsOneWidget);
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/');
+    await tester.tap(find.text('查找片源'));
+    await tester.pumpAndSettle();
+    expect(find.text('source / catalog / 作品 0'), findsOneWidget);
+  });
+
+  for (final size in [const Size(616, 600), const Size(1728, 1080)]) {
+    testWidgets(
+      'Recommendation skips broken artwork and opens details at $size',
+      (tester) async {
+        const broken = 'https://example.test/broken.png';
+        const cover = 'https://example.test/recommendation.png';
+        const brokenProvider = CachedNetworkImageProvider(broken);
+        const provider = CachedNetworkImageProvider(cover);
+        final cache = PaintingBinding.instance.imageCache;
+        final failure = Completer<ImageInfo>();
+        cache.putIfAbsent(
+          brokenProvider,
+          () => OneFrameImageStreamCompleter(failure.future),
+        );
+        final recorder = ui.PictureRecorder();
+        Canvas(recorder).drawColor(Colors.indigo, BlendMode.src);
+        final picture = recorder.endRecording();
+        final image = picture.toImageSync(16, 24);
+        picture.dispose();
+        cache.putIfAbsent(
+          provider,
+          () => OneFrameImageStreamCompleter(
+            Future.value(ImageInfo(image: image)),
+          ),
+        );
+        addTearDown(() {
+          cache.evict(brokenProvider);
+          cache.evict(provider);
+        });
+
+        final scraper =
+            LibraryScraper()
+              ..covers[1] = broken
+              ..covers[2] = cover;
+        final router = await pumpHome(tester, scraper, size);
+        expect(find.text('片库推荐'), findsNothing);
+
+        failure.completeError(StateError('封面读取失败'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('片库推荐'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('查看详情'));
+        await tester.pumpAndSettle();
+
+        expect(find.widgetWithText(Dialog, '作品 2'), findsOneWidget);
+        expect(find.text('查找片源'), findsOneWidget);
+        expect(router.routerDelegate.currentConfiguration.uri.query, isEmpty);
+      },
+    );
+  }
+
+  testWidgets('已确认的续播片源显示配置中的当前名称', (tester) async {
+    final saved = _sameEpisodeHistory('360zy:28', '旧片源名', 242);
+    await pumpHome(
+      tester,
+      LibraryScraper(),
+      const Size(1120, 720),
+      history: [saved],
+    );
+    expect(find.text('360zy'), findsOneWidget);
+    expect(find.text('旧片源名'), findsNothing);
+  });
+
+  testWidgets(
+    'Discovery categories and results are independent of playback source',
+    (tester) async {
+      final scraper = LibraryScraper();
+      await pumpHome(tester, scraper, const Size(1120, 720));
+      expect(find.widgetWithText(CategoryTabs, '国产动漫'), findsOneWidget);
+      expect(find.widgetWithText(CategoryTabs, '日本动漫'), findsOneWidget);
+      expect(find.textContaining('片源：'), findsNothing);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(HomeScreen)),
+      );
+      container.read(sourceVersionProvider.notifier).state++;
+      await tester.pumpAndSettle();
+      expect(scraper.homePages, [1]);
+    },
+  );
+
   testWidgets('Empty feed offers retry', (tester) async {
     final scraper = LibraryScraper()..empty = true;
     await pumpHome(tester, scraper, const Size(1120, 720));
@@ -189,12 +350,36 @@ void main() {
                 .first,
           )
           .height,
-      lessThanOrEqualTo(100),
+      inInclusiveRange(100, 130),
     );
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('昨日观看'));
     await tester.pumpAndSettle();
     expect(find.text('续播 saved 125'), findsOneWidget);
+  });
+
+  testWidgets('A mouse can drag the compact continuation row', (tester) async {
+    await pumpHome(
+      tester,
+      LibraryScraper(),
+      const Size(616, 600),
+      history: [
+        _savedHistory(),
+        _sameEpisodeHistory('28', 'LziApi', 125),
+        _sameEpisodeHistory('360zy:28', '360zy', 242),
+      ],
+    );
+    final firstTitle = find.text('昨日观看');
+    final before = tester.getTopLeft(firstTitle).dx;
+
+    await tester.drag(
+      firstTitle,
+      const Offset(-150, 0),
+      kind: ui.PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(firstTitle).dx, lessThan(before));
   });
 
   testWidgets('R4：切换分支后迟到的成功续播不抢走导航', (tester) async {
@@ -250,20 +435,139 @@ void main() {
     const Size(800, 600),
     const Size(1120, 720),
     const Size(1280, 800),
+    const Size(1728, 1080),
   ]) {
+    for (final theme in [AppTheme.light, AppTheme.dark]) {
+      testWidgets(
+        'Continuation distinguishes sources at $size in ${theme.brightness}',
+        (tester) async {
+          final history = [
+            _sameEpisodeHistory('28', 'LziApi', 125),
+            _sameEpisodeHistory('360zy:28', '360zy', 242),
+          ];
+          final playback = <Map<String, dynamic>>[];
+          final requests = <(String, String?)>[];
+          final router = await pumpHome(
+            tester,
+            LibraryScraper(),
+            size,
+            history: history,
+            theme: theme,
+            originalDetail: (id, sourceConfigId) async {
+              requests.add((id, sourceConfigId));
+              final item = history.singleWhere((item) => item.videoId == id);
+              return VideoModel(
+                id: id,
+                title: item.title,
+                source: item.sourceId,
+                episodes: [
+                  EpisodeModel(
+                    id: 'ep',
+                    title: '第 1 集',
+                    url: 'https://$sourceConfigId.test/refreshed.m3u8',
+                  ),
+                ],
+              );
+            },
+            onPlayback: playback.add,
+          );
+          for (final (index, timestamp, configId) in [
+            (0, '已看 2:05', 'lziapi'),
+            (1, '已看 4:02', '360zy'),
+          ]) {
+            final item = history[index];
+            final label = find.text(item.sourceId!);
+            expect(label, findsOneWidget);
+            final card = find.ancestor(
+              of: label,
+              matching: find.byType(InkWell),
+            );
+            final viewport = tester.getRect(
+              find.ancestor(of: card, matching: find.byType(ListView)),
+            );
+            expect(
+              find.descendant(of: card, matching: find.text(item.title)),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(of: card, matching: find.text('第 1 集')),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(of: card, matching: find.text(timestamp)),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                of: card,
+                matching: find.byIcon(Icons.movie_outlined),
+              ),
+              findsOneWidget,
+            );
+            final progress = tester.widget<LinearProgressIndicator>(
+              find.descendant(
+                of: card,
+                matching: find.byType(LinearProgressIndicator),
+              ),
+            );
+            expect(progress.value, item.progress);
+
+            if (index == 0) {
+              expect(
+                viewport.intersect(tester.getRect(card)),
+                tester.getRect(card),
+              );
+            }
+            await _tabTo(tester, label);
+            expect(
+              viewport.intersect(tester.getRect(card)),
+              tester.getRect(card),
+            );
+            await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+            await tester.pumpAndSettle();
+            expect(requests.last, (item.videoId, configId));
+            expect(
+              playback.last,
+              containsPair('videoUrl', 'https://$configId.test/refreshed.m3u8'),
+            );
+            expect(playback.last, containsPair('sourceId', item.sourceId));
+            expect(
+              playback.last,
+              containsPair('startAt', item.position.inSeconds),
+            );
+            expect(playback.last, containsPair('currentIndex', 0));
+            router.pop();
+            await tester.pumpAndSettle();
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
     testWidgets('One discovery grid fits $size and opens a title', (
       tester,
     ) async {
       await pumpHome(tester, LibraryScraper(), size);
       expect(find.text('发现'), findsOneWidget);
-      expect(find.text('热门推荐'), findsNothing);
+      expect(find.text('继续观看'), findsNothing);
+      expect(
+        tester.getTopLeft(find.text('片库')).dy -
+            tester.getBottomLeft(find.byTooltip('刷新')).dy,
+        inInclusiveRange(0, 40),
+      );
+      expect(
+        tester.getTopLeft(find.byType(PosterCard).first).dy -
+            tester.getBottomLeft(find.byType(CategoryTabs)).dy,
+        inInclusiveRange(0, 24),
+      );
+      expect(find.text('片库推荐'), findsNothing);
       expect(find.byType(PosterCard), findsWidgets);
       expect(find.text('作品 0'), findsOneWidget);
       expect(find.text('2026 · 动画'), findsWidgets);
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('作品 0'));
       await tester.pumpAndSettle();
-      expect(find.text('详情 video-0'), findsOneWidget);
+      expect(find.widgetWithText(Dialog, '作品 0'), findsOneWidget);
     });
   }
 
@@ -272,7 +576,7 @@ void main() {
   ) async {
     final scraper = LibraryScraper();
     await pumpHome(tester, scraper, const Size(1120, 720));
-    await tester.tap(find.text('动画'));
+    await tester.tap(find.text('国产动漫'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
     await tester.pumpAndSettle();
@@ -284,7 +588,7 @@ void main() {
   ) async {
     final scraper = LibraryScraper()..failHome = true;
     await pumpHome(tester, scraper, const Size(1120, 720));
-    expect(find.text('加载失败'), findsOneWidget);
+    expect(find.text('作品库加载失败'), findsOneWidget);
     scraper.failHome = false;
     await tester.tap(find.byTooltip('刷新'));
     await tester.pumpAndSettle();

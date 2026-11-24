@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/desktop_page_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/scraper_provider.dart';
@@ -6,7 +7,7 @@ import '../../services/database_service.dart';
 import '../../services/scraper/lziapi_scraper.dart';
 import '../../services/scraper/source_config.dart';
 
-/// 数据源管理：内置源启停/切换/测速，支持添加自定义 maccms 源。
+/// 数据源管理：内置源启停和连接测试，支持添加自定义 MacCMS 源。
 class SourceManagementScreen extends ConsumerStatefulWidget {
   const SourceManagementScreen({super.key});
 
@@ -17,12 +18,6 @@ class SourceManagementScreen extends ConsumerStatefulWidget {
 
 class _SourceManagementScreenState
     extends ConsumerState<SourceManagementScreen> {
-  Future<void> _selectSource(String id) async {
-    await DatabaseService().setActiveSourceId(id);
-    if (!mounted) return;
-    ref.read(sourceVersionProvider.notifier).state++;
-  }
-
   Future<void> _toggleSource(SourceConfig source, bool enabled) async {
     final db = DatabaseService();
     final sources =
@@ -42,8 +37,8 @@ class _SourceManagementScreenState
   Future<void> _deleteSource(SourceConfig source) async {
     final db = DatabaseService();
     final sources = db.getSources().where((s) => s.id != source.id).toList();
-    if (sources.isEmpty) {
-      _snack('至少保留一个数据源');
+    if (!sources.any((s) => s.enabled)) {
+      _snack('至少保留一个启用的数据源');
       return;
     }
     await db.saveSources(sources);
@@ -64,7 +59,10 @@ class _SourceManagementScreenState
     final started = DateTime.now();
     try {
       final videos = await LziApiScraper(
-        primary: source,
+        primary: source.copyWith(enabled: true),
+        fallbacks: const [],
+        allowListFallback: false,
+        allowDetailPlaybackSubstitution: false,
       ).getHome(page: 1).timeout(const Duration(seconds: 15));
       final elapsed = DateTime.now().difference(started).inMilliseconds;
       _snack(
@@ -153,12 +151,13 @@ class _SourceManagementScreenState
   @override
   Widget build(BuildContext context) {
     final sources = ref.watch(sourceConfigsProvider);
-    final active = ref.watch(activeSourceConfigProvider);
+    final enabled = ref.watch(enabledSourcesProvider);
     final colors = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('数据源管理')),
-      body: Align(
+    return DesktopPage(
+      title: '数据源管理',
+      leading: const BackButton(),
+      child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
@@ -166,12 +165,11 @@ class _SourceManagementScreenState
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               Text(
-                '当前主源：${active.name}。主源失败时会自动回退到其它启用的源；'
-                '源失效时可在这里切换或补充新源。',
+                '搜索会同时查询已启用的 ${enabled.length} 个片源。',
                 style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
               ),
               const SizedBox(height: 12),
-              for (final source in sources) _sourceTile(source, active.id),
+              for (final source in sources) _sourceTile(source),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.add_circle_outline),
@@ -186,19 +184,13 @@ class _SourceManagementScreenState
     );
   }
 
-  Widget _sourceTile(SourceConfig source, String activeId) {
+  Widget _sourceTile(SourceConfig source) {
     final colors = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Column(
         children: [
           ListTile(
-            leading: Radio<String>(
-              value: source.id,
-              groupValue: activeId,
-              onChanged:
-                  source.enabled ? (_) => _selectSource(source.id) : null,
-            ),
             title: Text(source.name),
             subtitle: Text(
               source.baseUrl,

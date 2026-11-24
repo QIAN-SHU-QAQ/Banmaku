@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_play/app.dart';
+import 'package:nova_play/providers/home_provider.dart';
 import 'package:nova_play/providers/scraper_provider.dart';
 
 import 'fakes.dart';
@@ -9,7 +10,10 @@ void main() {
   testWidgets('tap settings in rail', (WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [currentScraperProvider.overrideWithValue(FakeScraper())],
+        overrides: [
+          currentScraperProvider.overrideWithValue(FakeScraper()),
+          discoveryPageLoaderProvider.overrideWithValue(emptyDiscoveryPage),
+        ],
         child: const NovaPlayApp(),
       ),
     );

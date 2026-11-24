@@ -8,6 +8,7 @@ class VideoModel {
   final String? genre;
   final String? source;
   final String? sourceUrl;
+  final String? sourceConfigId;
   final List<EpisodeModel>? episodes;
   final DateTime? updatedAt;
 
@@ -21,6 +22,7 @@ class VideoModel {
     this.genre,
     this.source,
     this.sourceUrl,
+    this.sourceConfigId,
     this.episodes,
     this.updatedAt,
   });
@@ -36,6 +38,7 @@ class VideoModel {
       genre: json['genre'] as String?,
       source: json['source'] as String?,
       sourceUrl: json['sourceUrl'] as String?,
+      sourceConfigId: json['sourceConfigId'] as String?,
       episodes:
           (json['episodes'] as List?)
               ?.map((e) => EpisodeModel.fromJson(e as Map<String, dynamic>))
@@ -58,6 +61,7 @@ class VideoModel {
       'genre': genre,
       'source': source,
       'sourceUrl': sourceUrl,
+      if (sourceConfigId != null) 'sourceConfigId': sourceConfigId,
       'episodes': episodes?.map((e) => e.toJson()).toList(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
@@ -73,6 +77,7 @@ class VideoModel {
     String? genre,
     String? source,
     String? sourceUrl,
+    String? sourceConfigId,
     List<EpisodeModel>? episodes,
     DateTime? updatedAt,
   }) {
@@ -86,6 +91,7 @@ class VideoModel {
       genre: genre ?? this.genre,
       source: source ?? this.source,
       sourceUrl: sourceUrl ?? this.sourceUrl,
+      sourceConfigId: sourceConfigId ?? this.sourceConfigId,
       episodes: episodes ?? this.episodes,
       updatedAt: updatedAt ?? this.updatedAt,
     );

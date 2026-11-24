@@ -14,47 +14,45 @@ class CategoryTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
-      ),
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final height = (MediaQuery.textScalerOf(context).scale(14) + 24).clamp(
+      44.0,
+      double.infinity,
+    );
+    final radius = BorderRadius.circular(18);
+    return SizedBox(
+      height: height,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 20),
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final category = categories[index];
           final selected = category == selectedCategory;
           return Semantics(
             selected: selected,
             button: true,
-            child: InkWell(
-              onTap: () => onCategorySelected(category),
-              focusColor: colors.primary.withValues(alpha: 0.16),
-              hoverColor: colors.primary.withValues(alpha: 0.08),
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color:
-                          selected
-                              ? colors.primary
-                              : colors.outlineVariant.withValues(alpha: 0),
-                      width: 2,
+            child: Material(
+              color: selected ? colors.primaryContainer : Colors.transparent,
+              borderRadius: radius,
+              child: InkWell(
+                onTap: () => onCategorySelected(category),
+                borderRadius: radius,
+                focusColor: colors.primary.withValues(alpha: 0.16),
+                hoverColor: colors.primary.withValues(alpha: 0.08),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Center(
+                    child: Text(
+                      category,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color:
+                            selected
+                                ? colors.onPrimaryContainer
+                                : colors.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                ),
-                child: Text(
-                  category,
-                  style: TextStyle(
-                    color:
-                        selected ? colors.onSurface : colors.onSurfaceVariant,
-                    fontSize: 14,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
               ),

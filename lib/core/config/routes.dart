@@ -8,6 +8,8 @@ import '../../features/download/download_screen.dart';
 import '../../features/favorites/favorites_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/schedule/schedule_screen.dart';
+import '../../models/video_model.dart';
 import '../../shared/widgets/main_scaffold.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -63,14 +65,38 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // 全屏搜索页：移出 shell，push 覆盖整个窗口
       GoRoute(
+        path: '/schedule',
+        builder: (context, state) => const ScheduleScreen(),
+      ),
+      GoRoute(
         path: '/search',
-        builder: (context, state) => const SearchScreen(),
+        builder: (context, state) {
+          final params = state.uri.queryParameters;
+          final keyword = params['q'];
+          final from = params['from'];
+          final sourceSearch = params['mode'] == 'source';
+          final catalog =
+              !sourceSearch && (keyword == null || from == 'schedule');
+          return SearchScreen(
+            initialKeyword: keyword,
+            catalogSearch: catalog,
+            allSources: !catalog,
+            recoverySearch:
+                from == 'catalog' || (!sourceSearch && from != 'schedule'),
+          );
+        },
       ),
       GoRoute(
         path: '/detail/:id',
         builder: (context, state) {
           final id = state.pathParameters['id']!;
-          return DetailScreen(id: id);
+          final saved = state.extra;
+          return DetailScreen(
+            id: id,
+            autoplay: state.uri.queryParameters['play'] == '1',
+            chooseEpisode: state.uri.queryParameters['chooseEpisode'] == '1',
+            savedVideo: saved is VideoModel ? saved : null,
+          );
         },
       ),
       GoRoute(
@@ -87,6 +113,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             videoTitle: extra['videoTitle'] as String?,
             cover: extra['cover'] as String?,
             sourceId: extra['sourceId'] as String?,
+            sourceName: extra['sourceName'] as String?,
+            isLocalFile: extra['isLocalFile'] == true,
           );
         },
       ),

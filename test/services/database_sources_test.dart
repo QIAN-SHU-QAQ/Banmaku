@@ -42,6 +42,29 @@ void main() {
     expect(db.getActiveSourceId(), 'custom_1');
   });
 
+  test('配置桥接受自动回退的布尔值', () {
+    expect(
+      db.validateRemotePayload({
+        'set': {'source_auto_fallback_v1': true},
+      }),
+      isNull,
+    );
+    expect(
+      db.validateRemotePayload({
+        'set': {'source_auto_fallback_v1': 'true'},
+      }),
+      'bad_value',
+    );
+  });
+
+  test('自动回退默认关闭且重启后保留设置', () async {
+    expect(db.getSourceAutoFallback(), isFalse);
+    await db.setSourceAutoFallback(true);
+    db.resetForTest();
+    await db.init();
+    expect(db.getSourceAutoFallback(), isTrue);
+  });
+
   test('并发写历史不会丢更新（写队列串行化）', () async {
     await Future.wait([
       db.saveHistory(history('a', DateTime(2026, 1, 1))),

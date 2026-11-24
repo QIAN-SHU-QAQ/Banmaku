@@ -11,6 +11,7 @@ class _FakeAdapter implements HttpClientAdapter {
   /// path → (status, body)
   final Map<String, (int, Object?)> responses;
   final List<String> requests = [];
+  final requestOptions = <RequestOptions>[];
 
   @override
   Future<ResponseBody> fetch(
@@ -20,6 +21,7 @@ class _FakeAdapter implements HttpClientAdapter {
   ) async {
     final path = options.uri.path;
     requests.add(path);
+    requestOptions.add(options);
     final response = responses[path];
     if (response == null) {
       return ResponseBody.fromString(
@@ -80,6 +82,85 @@ BangumiApi _api(_FakeAdapter adapter) {
 }
 
 void main() {
+  test('发现页用两种地区标签分页，全部合并时去除重复作品', () async {
+    final adapter = _FakeAdapter({
+      '/v0/search/subjects': (
+        200,
+        {
+          'data': [
+            {'id': 123, 'name_cn': '条目', 'type': 2},
+          ],
+        },
+      ),
+    });
+    final api = _api(adapter);
+    final works = await api.browseCatalog('全部', page: 2);
+    expect(works.single.id, 'bangumi:123');
+    expect(adapter.requestOptions, hasLength(2));
+    expect(
+      adapter.requestOptions.map((request) => request.data['filter']['tag']),
+      unorderedEquals([
+        ['国产'],
+        ['日本'],
+      ]),
+    );
+    for (final request in adapter.requestOptions) {
+      expect(request.uri.queryParameters, {'limit': '12', 'offset': '12'});
+      expect(request.data, containsPair('keyword', ''));
+      expect(request.data, containsPair('sort', 'heat'));
+    }
+    await api.browseCatalog('日本动漫', page: 3);
+    final japanese = adapter.requestOptions.last;
+    expect(japanese.uri.queryParameters, {'limit': '24', 'offset': '48'});
+    expect(japanese.data['filter']['tag'], ['日本']);
+  });
+
+  test('作品库搜索保留官方相关顺序、动画元数据和分页参数', () async {
+    final adapter = _FakeAdapter({
+      '/v0/search/subjects': (
+        200,
+        {
+          'data': [
+            {
+              'id': 575057,
+              'name': '異世界のんびり農家２',
+              'name_cn': '异世界悠闲农家 第二季',
+              'type': 2,
+              'date': '2026-04-06',
+              'images': {'common': 'https://example.test/s2.jpg'},
+              'meta_tags': ['奇幻', '日常'],
+              'summary': '第二季简介',
+              'rating': {'score': 6.4},
+            },
+            {'id': 1, 'name': '漫画', 'type': 1},
+            {'id': 2, 'name': '成年条目', 'type': 2, 'nsfw': true},
+            {'id': 376137, 'name': '異世界のんびり農家', 'type': 2},
+          ],
+        },
+      ),
+    });
+    final works = await _api(adapter).searchCatalog('  异世界悠闲农家  ', page: 2);
+    expect(works.map((work) => work.id), ['bangumi:575057', 'bangumi:376137']);
+    expect(works.first.title, '异世界悠闲农家 第二季');
+    expect(works.first.year, '2026');
+    expect(works.first.cover, 'https://example.test/s2.jpg');
+    expect(works.first.genre, '奇幻、日常');
+    expect(works.first.description, '第二季简介');
+    expect(works.first.rating, 6.4);
+    expect(works.first.episodes, isNull);
+    expect(works.last.title, '異世界のんびり農家');
+    final request = adapter.requestOptions.single;
+    expect(request.uri.queryParameters, {'limit': '24', 'offset': '24'});
+    expect(request.data, {
+      'keyword': '异世界悠闲农家',
+      'sort': 'match',
+      'filter': {
+        'type': [2],
+        'nsfw': false,
+      },
+    });
+  });
+
   test('R7：多个候选中按相似度选择，不直接取首项', () async {
     final adapter = _FakeAdapter({
       '/v0/search/subjects': (

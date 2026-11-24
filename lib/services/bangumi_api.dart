@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/bangumi_info.dart';
+import '../models/video_model.dart';
 
 /// Bangumi 搜索候选（R7：不再直接取搜索首项）。
 class BangumiSubjectCandidate {
@@ -65,7 +66,7 @@ class BangumiApi {
               receiveTimeout: const Duration(seconds: 12),
               headers: {
                 'User-Agent':
-                    'NovaPlay/1.0 (Windows desktop; https://github.com/novaplay)',
+                    'NovaPlay/1.0 (https://github.com/QIAN-SHU-QAQ/NovaPlay)',
                 'Accept': 'application/json',
               },
             ),
@@ -94,21 +95,135 @@ class BangumiApi {
     '出品',
   };
 
+  static const browseTags = {'国产动漫': '国产', '日本动漫': '日本'};
+  static const _catalogPageSize = 24;
+
+  Future<List<dynamic>?> _searchRows(
+    String keyword, {
+    int? catalogPage,
+    int pageSize = _catalogPageSize,
+    String? browseTag,
+  }) async {
+    final search = await _dio.post(
+      '/v0/search/subjects',
+      queryParameters:
+          catalogPage == null
+              ? null
+              : {'limit': pageSize, 'offset': (catalogPage - 1) * pageSize},
+      data: {
+        'keyword': keyword,
+        if (catalogPage != null) 'sort': browseTag == null ? 'match' : 'heat',
+        'filter': {
+          'type': [2],
+          if (catalogPage != null) 'nsfw': false,
+          if (browseTag != null) 'tag': [browseTag],
+        },
+      },
+    );
+    final data = search.data;
+    return data is Map ? (data['data'] as List?) : null;
+  }
+
+  /// Search the animation catalog in Bangumi's relevance order.
+  Future<List<VideoModel>> searchCatalog(String title, {int page = 1}) async {
+    final keyword = title.trim();
+    if (keyword.isEmpty) return [];
+    final rows = await _searchRows(keyword, catalogPage: page);
+    if (rows == null) throw const FormatException('作品库响应缺少条目列表');
+    return _catalogWorks(rows);
+  }
+
+  /// Browse each regional tag by popularity. The combined feed takes a page
+  /// from both regions, alternating entries so each region appears up front.
+  Future<List<VideoModel>> browseCatalog(
+    String category, {
+    int page = 1,
+  }) async {
+    final tag = browseTags[category];
+    if (tag != null) {
+      return _catalogWorks(await _browseRows(tag, page, _catalogPageSize));
+    }
+    if (category != '全部') throw ArgumentError.value(category, 'category');
+    const regionalPageSize = _catalogPageSize ~/ 2;
+    final pages = await Future.wait([
+      for (final tag in browseTags.values)
+        _browseRows(tag, page, regionalPageSize),
+    ]);
+    return _catalogWorks([
+      for (var i = 0; i < regionalPageSize; i++)
+        for (final rows in pages)
+          if (i < rows.length) rows[i],
+    ]);
+  }
+
+  Future<List<dynamic>> _browseRows(String tag, int page, int limit) async {
+    final rows = await _searchRows(
+      '',
+      catalogPage: page,
+      pageSize: limit,
+      browseTag: tag,
+    );
+    if (rows == null) throw const FormatException('作品库响应缺少条目列表');
+    return rows;
+  }
+
+  List<VideoModel> _catalogWorks(List<dynamic> rows) {
+    final works = <String, VideoModel>{};
+    for (final row in rows.whereType<Map>()) {
+      final id = row['id'];
+      if (id is! int || id <= 0 || row['type'] != 2 || row['nsfw'] == true) {
+        continue;
+      }
+      final title = _catalogText(row['name_cn']) ?? _catalogText(row['name']);
+      if (title == null) continue;
+      final images = row['images'];
+      final cover =
+          images is Map
+              ? _catalogText(images['common']) ??
+                  _catalogText(images['large']) ??
+                  _catalogText(images['medium'])
+              : null;
+      final date = DateTime.tryParse(_catalogText(row['date']) ?? '');
+      final rating = row['rating'];
+      final score = rating is Map ? rating['score'] : null;
+      final tags = row['meta_tags'];
+      final genres =
+          tags is List
+              ? tags
+                  .whereType<String>()
+                  .map((tag) => tag.trim())
+                  .where((tag) => tag.isNotEmpty)
+                  .take(4)
+                  .join('、')
+              : null;
+      final key = 'bangumi:$id';
+      works.putIfAbsent(
+        key,
+        () => VideoModel(
+          id: key,
+          title: title,
+          cover: cover,
+          description: _catalogText(row['summary']),
+          year: date?.year.toString(),
+          genre: genres,
+          rating: score is num && score > 0 ? score.toDouble() : null,
+        ),
+      );
+    }
+    return works.values.toList();
+  }
+
+  static String? _catalogText(Object? value) {
+    if (value is! String) return null;
+    final text = value.trim();
+    return text.isEmpty ? null : text;
+  }
+
   /// 搜索动画候选并按匹配度排序。
   Future<List<BangumiSubjectCandidate>> searchSubjects(String title) async {
     final keyword = title.trim();
     if (keyword.isEmpty) return const [];
-    final search = await _dio.post(
-      '/v0/search/subjects',
-      data: {
-        'keyword': keyword,
-        'filter': {
-          'type': [2],
-        }, // 2 = 动画
-      },
-    );
-    final data = search.data;
-    final list = data is Map ? (data['data'] as List?) : null;
+    final list = await _searchRows(keyword);
     if (list == null || list.isEmpty) return const [];
 
     final candidates = <BangumiSubjectCandidate>[];

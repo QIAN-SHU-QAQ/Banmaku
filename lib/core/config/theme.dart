@@ -29,9 +29,10 @@ extension NovaSemanticColorsContext on BuildContext {
       );
 }
 
-/// Neutral surfaces keep the artwork prominent. Blue is reserved for actions.
+/// Warm paper and violet accents leave the strongest colors to cover art.
 class AppTheme {
-  static const seedColor = Color(0xFF35667A);
+  static const seedColor = Color(0xFF51428D);
+  static const _iris = Color(0xFFC8BCFF);
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
 
@@ -41,31 +42,32 @@ class AppTheme {
       seedColor: seedColor,
       brightness: brightness,
     ).copyWith(
-      primary: dark ? const Color(0xFFA0CCDF) : seedColor,
-      onPrimary: dark ? const Color(0xFF103442) : Colors.white,
+      primary: dark ? _iris : seedColor,
+      onPrimary: dark ? const Color(0xFF282043) : Colors.white,
       primaryContainer:
-          dark ? const Color(0xFF273E49) : const Color(0xFFE1EBF0),
+          dark ? const Color(0xFF372D52) : const Color(0xFFEBE4FF),
       onPrimaryContainer:
-          dark ? const Color(0xFFD0E9F3) : const Color(0xFF244A5C),
+          dark ? const Color(0xFFE6DEFF) : const Color(0xFF392C6A),
       secondaryContainer:
-          dark ? const Color(0xFF2B353D) : const Color(0xFFE7ECEE),
+          dark ? const Color(0xFF312B3D) : const Color(0xFFF0E9F5),
       onSecondaryContainer:
-          dark ? const Color(0xFFD6E1E6) : const Color(0xFF344B56),
-      surface: dark ? const Color(0xFF171B1F) : const Color(0xFFFAFAF8),
-      surfaceContainerLowest: dark ? const Color(0xFF121619) : Colors.white,
+          dark ? const Color(0xFFE0D6ED) : const Color(0xFF514462),
+      surface: dark ? const Color(0xFF191621) : const Color(0xFFFBF8F4),
+      surfaceContainerLowest:
+          dark ? const Color(0xFF12101A) : const Color(0xFFFFFCF8),
       surfaceContainerLow:
-          dark ? const Color(0xFF1E2328) : const Color(0xFFF3F4F2),
+          dark ? const Color(0xFF211D2B) : const Color(0xFFF5EFEA),
       surfaceContainer:
-          dark ? const Color(0xFF23292E) : const Color(0xFFEDEFED),
+          dark ? const Color(0xFF272234) : const Color(0xFFF0E9E5),
       surfaceContainerHigh:
-          dark ? const Color(0xFF2B3238) : const Color(0xFFE6EAE8),
+          dark ? const Color(0xFF30293F) : const Color(0xFFEAE0DF),
       surfaceContainerHighest:
-          dark ? const Color(0xFF353D44) : const Color(0xFFDBE1DE),
-      onSurface: dark ? const Color(0xFFE8EDF0) : const Color(0xFF20282D),
+          dark ? const Color(0xFF3D344C) : const Color(0xFFE3D9DA),
+      onSurface: dark ? const Color(0xFFF4EDF8) : const Color(0xFF241D2B),
       onSurfaceVariant:
-          dark ? const Color(0xFFADB7BF) : const Color(0xFF5B6870),
-      outline: dark ? const Color(0xFF74838D) : const Color(0xFF75828A),
-      outlineVariant: dark ? const Color(0xFF354049) : const Color(0xFFD7DEDD),
+          dark ? const Color(0xFFC0B4CA) : const Color(0xFF685C70),
+      outline: dark ? const Color(0xFF9D8CA9) : const Color(0xFF907D92),
+      outlineVariant: dark ? const Color(0xFF40364D) : const Color(0xFFE8DEDA),
     );
     final text = ThemeData(brightness: brightness).textTheme
         .apply(
@@ -90,8 +92,9 @@ class AppTheme {
             letterSpacing: -0.4,
           ),
           titleLarge: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.35,
           ),
           titleMedium: const TextStyle(
             fontSize: 15,
@@ -119,7 +122,7 @@ class AppTheme {
           ),
         );
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(10),
     );
     return ThemeData(
       useMaterial3: true,
@@ -133,6 +136,7 @@ class AppTheme {
       ],
       textTheme: text,
       scaffoldBackgroundColor: colors.surface,
+      focusColor: colors.primary.withValues(alpha: 0.16),
       extensions: [
         NovaSemanticColors(
           success: dark ? const Color(0xFF91CBB3) : const Color(0xFF3C7660),
@@ -146,7 +150,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleSpacing: 28,
-        toolbarHeight: 76,
+        toolbarHeight: 58,
         titleTextStyle: text.headlineSmall?.copyWith(color: colors.onSurface),
       ),
       cardTheme: CardTheme(
@@ -154,7 +158,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: shape,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -191,15 +195,15 @@ class AppTheme {
           vertical: 12,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colors.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colors.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colors.primary, width: 1.5),
         ),
         hintStyle: text.bodyMedium?.copyWith(color: colors.onSurfaceVariant),

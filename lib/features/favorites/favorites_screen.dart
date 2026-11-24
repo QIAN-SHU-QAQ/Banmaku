@@ -5,7 +5,8 @@ import '../../core/utils/play_launcher.dart';
 import '../../models/video_model.dart';
 import '../../providers/favorites_provider.dart';
 import '../../providers/history_provider.dart';
-import '../../providers/scraper_provider.dart';
+import '../../services/database_service.dart';
+import '../../shared/widgets/desktop_page_header.dart';
 import '../../shared/widgets/wide_media_card.dart';
 
 class FavoritesScreen extends ConsumerWidget {
@@ -15,75 +16,87 @@ class FavoritesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final favorites = ref.watch(favoritesProvider);
     // 反查观看历史：收藏卡上展示进度并支持一键续播
-    final historyMap = {
-      for (final item in ref.watch(historyProvider)) item.videoId: item,
-    };
+    ref.watch(historyProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('收藏'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Center(
-              child: Text(
-                '${favorites.length} 部',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+    return DesktopPage(
+      title: '收藏',
+      actions: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Center(
+            child: Text(
+              '${favorites.length} 部',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ),
-        ],
-      ),
-      body:
+        ),
+      ],
+      child:
           favorites.isEmpty
               ? _buildEmptyState(context)
-              : Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 920),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: favorites.length,
-                    itemBuilder: (context, index) {
-                      final video = favorites[index];
-                      final history = historyMap[video.id];
-                      return WideMediaCard(
-                        title: video.title,
-                        coverUrl: video.cover,
-                        subtitle: video.genre,
-                        meta:
-                            video.episodes == null
-                                ? null
-                                : '共 ${video.episodes!.length} 集',
-                        progress: history?.progress,
-                        onTap:
-                            () => context.push(
-                              '/detail/${Uri.encodeComponent(video.id)}',
-                            ),
-                        onResume: () {
-                          if (history != null) {
-                            launchHistoryResume(
-                              context,
-                              history,
-                              fetchDetail:
-                                  () => ref
-                                      .read(currentScraperProvider)
-                                      .getDetail(history.videoId),
-                            );
-                          } else {
-                            context.push(
-                              '/detail/${Uri.encodeComponent(video.id)}',
-                            );
-                          }
-                        },
-                        onLongPress: () => _confirmRemove(context, ref, video),
-                        onRemove: () => _confirmRemove(context, ref, video),
+              : LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns =
+                      constraints.maxWidth >= 1320
+                          ? 3
+                          : constraints.maxWidth >= 860
+                          ? 2
+                          : 1;
+                  final scale = MediaQuery.textScalerOf(context).scale(14);
+                  Widget item(BuildContext context, int index) =>
+                      _mediaCard(context, ref, favorites[index]);
+                  final padding = EdgeInsets.all(
+                    constraints.maxWidth >= 720 ? 24 : 16,
+                  );
+                  return columns == 1
+                      ? ListView.separated(
+                        padding: padding,
+                        itemCount: favorites.length,
+                        itemBuilder: item,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      )
+                      : GridView.builder(
+                        padding: padding,
+                        itemCount: favorites.length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          mainAxisExtent:
+                              122 +
+                              (scale - 14).clamp(0.0, double.infinity) * 5,
+                        ),
+                        itemBuilder: item,
                       );
-                    },
-                  ),
-                ),
+                },
               ),
+    );
+  }
+
+  Widget _mediaCard(BuildContext context, WidgetRef ref, VideoModel video) {
+    final history = DatabaseService().historyForVideo(video);
+    void openDetails() {
+      context.push('/detail/${Uri.encodeComponent(video.id)}', extra: video);
+    }
+
+    return WideMediaCard(
+      title: video.title,
+      coverUrl: video.cover,
+      subtitle: video.genre,
+      meta: video.episodes == null ? null : '共 ${video.episodes!.length} 集',
+      progress: history?.progress,
+      onTap: openDetails,
+      onResume: () {
+        if (history != null) {
+          resumeFromOriginalSource(context, ref, history);
+        } else {
+          openDetails();
+        }
+      },
+      onLongPress: () => _confirmRemove(context, ref, video),
+      onRemove: () => _confirmRemove(context, ref, video),
     );
   }
 

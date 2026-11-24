@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'core/config/branding.dart';
+import 'core/network/windows_proxy.dart';
 import 'core/window/player_window_bridge.dart';
 import 'features/player/player_window.dart';
 import 'services/database_service.dart';
@@ -19,6 +21,7 @@ import 'services/prefs_bridge.dart';
 /// `--player <json>`；子进程据此渲染播放器窗口。
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  installWindowsProxy();
   MediaKit.ensureInitialized();
   await DatabaseService().init();
 
@@ -48,7 +51,7 @@ Future<void> main(List<String> args) async {
     }
 
     await windowManager.ensureInitialized();
-    await windowManager.setTitle('NovaPlay 播放器');
+    await windowManager.setTitle('$appDisplayName 播放器');
     await windowManager.setSize(const Size(1280, 720));
     await windowManager.center();
 
@@ -71,7 +74,33 @@ Future<void> main(List<String> args) async {
     endpointFile: endpointFile,
   );
 
-  runApp(const ProviderScope(child: NovaPlayApp()));
+  WindowManager? desktopWindowManager;
+  if (Platform.isWindows) {
+    await windowManager.ensureInitialized();
+    await windowManager.waitUntilReadyToShow(
+      const WindowOptions(
+        title: appDisplayName,
+        size: Size(1280, 720),
+        minimumSize: Size(1120, 720),
+        center: true,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      ),
+    );
+    desktopWindowManager = windowManager;
+  }
+
+  runApp(
+    ProviderScope(
+      child: NovaPlayApp(desktopWindowManager: desktopWindowManager),
+    ),
+  );
+
+  if (desktopWindowManager != null) {
+    await WidgetsBinding.instance.waitUntilFirstFrameRasterized;
+    await desktopWindowManager.show();
+    await desktopWindowManager.focus();
+  }
 }
 
 /// 主窗口与播放器进程共用的配置桥端点文件路径。

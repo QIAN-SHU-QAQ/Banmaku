@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 
-import 'core/config/theme.dart';
+import 'core/config/branding.dart';
 import 'core/config/routes.dart';
+import 'core/config/theme.dart';
+import 'core/window/main_window_chrome.dart';
 import 'providers/favorites_provider.dart';
 import 'providers/history_provider.dart';
 import 'providers/theme_provider.dart';
@@ -12,7 +15,9 @@ import 'services/database_service.dart';
 import 'services/prefs_bridge.dart';
 
 class NovaPlayApp extends ConsumerStatefulWidget {
-  const NovaPlayApp({super.key});
+  const NovaPlayApp({super.key, this.desktopWindowManager});
+
+  final WindowManager? desktopWindowManager;
 
   @override
   ConsumerState<NovaPlayApp> createState() => _NovaPlayAppState();
@@ -62,13 +67,17 @@ class _NovaPlayAppState extends ConsumerState<NovaPlayApp>
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
 
-    return MaterialApp.router(
-      title: 'NovaPlay',
+    final app = MaterialApp.router(
+      title: appDisplayName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       routerConfig: router,
     );
+    final manager = widget.desktopWindowManager;
+    return manager == null
+        ? app
+        : DesktopWindowChrome(manager: manager, child: app);
   }
 }
