@@ -1,8 +1,8 @@
 # Banmaku
 
-Banmaku（原 NovaPlay）是用 Flutter 和 media_kit 编写的 Windows 动漫聚合播放器。可以从 Bangumi 作品库发现和搜索动画，按作品查找片源、选集播放，也能收藏作品并从观看历史接着看。
+Banmaku 是用 Flutter 和 media_kit 编写的 Windows 动漫聚合播放器。可以从 Bangumi 作品库发现和搜索动画，按作品查找片源、选集播放，也能收藏作品并从观看历史接着看。
 
-目前仍在开发，可从源码运行或自行构建 Windows 运行版。分类与搜索分页、独立播放窗口、HLS 离线下载及可选弹幕已合入；跨进程历史保存、下载暂停进度及播放器重连问题已分轮修复并完成回归，具体验证范围见下方。可下载版本以[主仓库 Releases](https://github.com/QIAN-SHU-QAQ/NovaPlay/releases) 为准。
+**发布状态（2026-11-24）** `v1.0.0-preview.2` 已公开发布。本版通过 Windows 11 x64 沙盒验收和开发机在线播放抽查，发布页提供便携 ZIP 和 SHA-256 校验文件。[下载 Preview 2](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/tag/v1.0.0-preview.2) · [PR #18](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/18)
 
 <details>
 <summary>查看早期版本界面（2026-10-30）</summary>
@@ -13,13 +13,27 @@ Banmaku（原 NovaPlay）是用 Flutter 和 media_kit 编写的 Windows 动漫�
 
 </details>
 
-[验收记录](#验收记录2026-11-18) · [预览版安装](#windows-预览版安装) · [预览版说明](docs/preview-notes.md) · [从源码运行](#从源码运行) · [在线验收与开发计划](docs/reviews/2026-11-06-online-acceptance-next-phase.md) · [反馈问题](https://github.com/QIAN-SHU-QAQ/NovaPlay/issues)
+[Preview 2 验收](#preview-2-验收) · [预览版安装](#windows-预览版安装) · [预览版说明](docs/preview-notes.md) · [从源码运行](#从源码运行) · [开发报告](开发报告.md) · [反馈问题](https://github.com/QIAN-SHU-QAQ/Banmaku/issues)
+
+## Preview 2 验收
+
+验收使用 GitHub Actions 从 PR #18 提交 `d616898` 构建的 `Banmaku-1.0.0-preview.2-windows-x64.zip`。已公开的 ZIP 与验收包的 SHA-256 一致。[Windows 构建与打包](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/45181182911)
+
+| 场景 | 实测结果 |
+| --- | --- |
+| 干净 Windows 11 x64 | 安装 Microsoft VC++ x64 运行库后，便携版从含中文和空格的路径启动。旧版历史、收藏、设置、下载记录及已下载文件均保留。 |
+| 续播与片源故障 | 受控 HLS 样本从历史页恢复第 2 集。原片源返回 HTTP 503 时保留原进度，部分片源失效时可继续选用有结果的片源。 |
+| 下载重启续传 | 暂停在 4/6 分片后退出。重新打开后同一任务保持 66.7%，继续时校验并复用 4 片，只补下剩余 2 片。成品 SHA-256 与原始分片按顺序拼接的结果一致。 |
+| 离线播放 | 在沙盒禁止外部联网、测试片源返回 HTTP 503 时，从下载页播放本地文件，并定位到 0:33 和 0:54。 |
+| 开发机在线样本 | 《雾山五行》第 2 集从约 36 秒续播，《轻音少女》第二季第 1 集通过魔都资源播放并保存约 33 秒进度。 |
+
+337 项 Flutter 测试、17 项自动化策略测试和打包脚本边界回归通过。当前兼容性验收覆盖 Windows 11 x64。Windows 10 实机兼容性以及弹弹play 真实鉴权和加载待补测。[CI 验证](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/45181250683) · [开发报告](开发报告.md#发布候选与验收)
 
 ## 验收记录（2026-11-18）
 
-Windows 实机确认在线发现、搜索、详情、收藏、选集、播放和拖动可用。公开 TS HLS 样片通过下载器层的取消、续传、文件哈希比对和本地解码。R1 历史有序补交与 R6 配置桥已随 [PR #7](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/7) 合入，两个播放器跨两轮主窗口重启均能恢复同步。验收基线是 `689f8dd`。[基线 CI](https://github.com/QIAN-SHU-QAQ/NovaPlay/actions/runs/42163036020)
+Windows 实机确认在线发现、搜索、详情、收藏、选集、播放和拖动可用。公开 TS HLS 样片通过下载器层的取消、续传、文件哈希比对和本地解码。R1 历史有序补交与 R6 配置桥已随 [PR #7](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/7) 合入，两个播放器跨两轮主窗口重启均能恢复同步。验收基线是 `689f8dd`。[基线 CI](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/42163036020)
 
-**在线续播修复已合入。** Windows 实测从首页、历史和收藏续播第 2 集，三个入口均刷新了播放地址，并从约 180 秒继续。失败时的进度保留和重试已有回归覆盖。[PR #14 验收](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/14#pullrequestreview-5934123910)
+**在线续播修复已合入。** Windows 实测从首页、历史和收藏续播第 2 集，三个入口均刷新了播放地址，并从约 180 秒继续。失败时的进度保留和重试已有回归覆盖。[PR #14 验收](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/14#pullrequestreview-5934123910)
 
 早期候选 `v1.0.0-preview.1` 在干净的 Windows 11 x64 沙盒通过启动、三个入口续播、下载暂停后重启续传、离线播放和旧版数据迁移。受控 HLS 下载的成品 SHA-256 与原始分片按顺序拼接后的值一致，停用片源后仍可从下载页播放。该次验收使用 Preview 1 发布草稿。Windows 10、真实外部片源、Bangumi 跨季匹配和弹弹play 未列入该次通过范围。
 
@@ -28,12 +42,14 @@ Windows 实机确认在线发现、搜索、详情、收藏、选集、播放和
 ## Windows 预览版安装
 
 1. 如果电脑尚未安装 Microsoft Visual C++ v14 x64 运行库，请先安装微软官方组件。[下载 VC++ x64 运行库](https://aka.ms/vc14/vc_redist.x64.exe)
-2. 预览版发布后，下载 `Banmaku-<版本>-windows-x64.zip` 和同名 `.sha256` 文件，校验后解压。[GitHub Releases](https://github.com/QIAN-SHU-QAQ/NovaPlay/releases)
+2. 下载 `Banmaku-1.0.0-preview.2-windows-x64.zip` 和同名 `.sha256` 文件，校验后解压。[下载 Preview 2](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/tag/v1.0.0-preview.2)
 3. 运行解压目录中的 `nova_play.exe`，保留同目录的 DLL 和 `data/`。路径可以包含中文和空格。[完整使用说明](docs/preview-usage.md)
 
-当前便携包的验收目标是 Windows 11 x64。更新时先退出主窗口和所有播放器，再把新 ZIP 解压到新目录并启动。观看历史、收藏、设置和自定义片源保存在 `%APPDATA%\com.novaplay\nova_play`，Banmaku 会从这里读取原 NovaPlay 数据。
+当前便携包的验收目标是 Windows 11 x64。更新时先退出主窗口和所有播放器，再把新 ZIP 解压到新目录并启动。Banmaku 从 `%APPDATA%\com.novaplay\nova_play` 读取已有的观看历史、收藏、设置和自定义片源。
 
 ## 现在能做什么
+
+以下功能以 Preview 2 候选版为准。
 
 - 发现和作品搜索使用 Bangumi 动画作品库。发现页可按「国产动漫」和「日本动漫」浏览，点开作品可预览资料。分类与搜索结果都支持滚动加载。
 - 播放在线视频，切换剧集、倍速、音量和窗口全屏；播放失败时可重试。**视频在独立的播放窗口中打开**，关掉视频窗口不会退出主界面，可以边看边浏览；可在设置里开启「自动播放下一集」并配置默认倍速。
@@ -80,7 +96,7 @@ Banmaku 默认启用 `LziApi`（`cj.lziapi.com`）和 `360zy`（`360zy.com`）�
 
 ### 修复状态与限制
 
-2026-11-03/04 的 Windows 实机检验发现的问题，已通过 [PR #4](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/4)、[PR #5](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/5)、[PR #6](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/6) 以及后续 R1–R7 修复分轮处理：
+2026-11-03 至 2026-11-04 的 Windows 实机检验发现的问题，已由 PR #4、#5、#6 和后续 R1–R7 分轮处理。[PR #4](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/4) · [PR #5](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/5) · [PR #6](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/6)
 
 - **观看历史可能丢失（已修复）。** 独立播放器写入的新记录以语义操作（upsert）交给主窗口进程，由主进程在最新历史列表上合并，多个播放器同时写也不会互相覆盖；主窗口历史页会即时刷新，修改“自动播放下一集”等设置不会再覆盖新历史。主窗口关闭期间播放器的操作会写入离线日志，下次启动时合并。
 - **暂停下载会重置进度显示（已修复）。** 取消/异常分支改为基于当前任务写回状态，暂停后保留最新进度；继续下载仍会从断点恢复并完成。
@@ -103,7 +119,7 @@ PR #7（R1 历史有序补交/版本规则 + R6 配置桥强制会话校验）�
 - **GitHub CI**：`CI validation` 通过（精确 head/base 的隔离测试与 Windows 构建）；`Build Windows preview` 通过并产出便携包。
 - **集成验证**：main `1f0b338` + 本 PR 合并后 200/200 测试通过；Windows Release 构建成功，`scripts/test-scripts.ps1` 边界回归全部通过。
 - **实机验证**：双播放器 + 主窗口重启场景通过——R6 会话校验生效、旧播放器自动重连、离线日志回放后观看时间单调前进、日志清空。
-- **合并后复验**：在 `689f8dd` 重跑 200 项 Flutter 测试和 Windows Release 构建，并在独立配置中完成双播放器两轮重启。缺失、空值、错误类型和旧会话均被拒绝。旧操作重传保留 20 秒进度，后来主动回退到 5 秒可保存。[PR #7 合并记录](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/7)
+- **合并后复验**：在 `689f8dd` 重跑 200 项 Flutter 测试和 Windows Release 构建，并在独立配置中完成双播放器两轮重启。缺失、空值、错误类型和旧会话均被拒绝。旧操作重传保留 20 秒进度，后来主动回退到 5 秒可保存。[PR #7 合并记录](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/7)
 
 ## 从源码运行
 
@@ -118,16 +134,16 @@ PR #7（R1 历史有序补交/版本规则 + R6 配置桥强制会话校验）�
 
   ```powershell
   New-Item -ItemType Directory -Path E:\dev -Force
-  New-Item -ItemType Junction -Path E:\dev\NovaPlay -Target "E:\项目\NovaPlay"
-  Set-Location E:\dev\NovaPlay
+  New-Item -ItemType Junction -Path E:\dev\Banmaku -Target "E:\项目\Banmaku"
+  Set-Location E:\dev\Banmaku
   flutter build windows
   ```
 
 在 PowerShell 中运行：
 
 ```powershell
-git clone https://github.com/QIAN-SHU-QAQ/NovaPlay.git
-cd NovaPlay
+git clone https://github.com/QIAN-SHU-QAQ/Banmaku.git
+cd Banmaku
 flutter doctor -v
 flutter pub get --enforce-lockfile
 flutter run -d windows
@@ -154,7 +170,7 @@ flutter build windows --release
 
 测试使用离线替身，不需要请求在线片库。实际播放与第三方接口的可用性需要另行实测。
 
-2026-11-04 在 Windows、Flutter 3.29.3 / Dart 3.7.2 下，针对合并提交 [`2da2d91`](https://github.com/QIAN-SHU-QAQ/NovaPlay/commit/2da2d91dd3ab86b2660dc8c85e40135a8f2bef39) 使用锁定依赖完成检验：
+2026-11-04 在 Windows、Flutter 3.29.3 / Dart 3.7.2 下，针对合并提交 [`2da2d91`](https://github.com/QIAN-SHU-QAQ/Banmaku/commit/2da2d91dd3ab86b2660dc8c85e40135a8f2bef39) 使用锁定依赖完成检验：
 
 | 检查 | 结果 |
 | --- | --- |
@@ -186,9 +202,9 @@ PathAccessException: Cannot create file, path = '\?\C:\Users\<用户>\AppData\Lo
 
 ```powershell
 # 查看是否带 Low 标签
-icacls "E:\项目\NovaPlay\运行版" /T | Select-String "Mandatory Label"
+icacls "E:\项目\Banmaku\运行版" /T | Select-String "Mandatory Label"
 # 统一改成 Medium（对整个运行目录执行一次）
-icacls "E:\项目\NovaPlay\运行版" /setintegritylevel Medium /T
+icacls "E:\项目\Banmaku\运行版" /setintegritylevel Medium /T
 ```
 
 修复后重新启动应用，任务管理器中 `nova_play.exe` 的完整性级别应为「中等 / Medium」。以后每次构建并复制到运行目录后，如果构建环境是沙箱（或用脚本部署），都需要重新执行这条命令；仓库里的 `scripts/deploy-release.ps1` 会自动完成复制、修正标签和更新快捷方式：
@@ -222,13 +238,10 @@ powershell -ExecutionPolicy Bypass -File scripts\package-portable.ps1
 
 ## 继续开发
 
-下一批按以下顺序交付，详细文件范围、复现步骤和通过条件见 [在线验收与下一阶段开发计划](docs/reviews/2026-11-06-online-acceptance-next-phase.md)。
+1. **补验外部服务与兼容性。** 有测试凭据时核对弹弹play 鉴权、作品及剧集匹配和加载。Windows 10 兼容性单独记录。
+2. **实现本地追番管理。** 支持想看、在看、看完和筛选，验收同一作品的不同季度分别保存、重启后状态可读。
 
-1. **P0 在线续播已合入。** 三入口原集续播已通过 Windows 验收。
-2. **P1 完成 Windows 便携预览版发布验收。** 每个候选包分别记录干净 Windows 11 x64 上的启动、在线选集与续播、下载和离线播放、旧版数据升级，以及真实片源、Bangumi 跨季匹配和弹弹play 的验证范围。[预览版说明](docs/preview-notes.md)
-3. **P2 做本地追番管理。** 预览版验收后先交付想看、在看、看完和筛选，覆盖多季隔离和重启保留。
-
-分页、播放设置、下载与弹幕的基础实现已随 [PR #3](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/3) 合入。[开发报告](开发报告.md)和早期开发计划中的待办需要按当前实现重新核对，不能再将这些功能全部视为尚未实现。
+详细代码边界、版本验收和后续计划见开发报告。早期在线续播等修复保留在历史验收记录中。[开发报告](开发报告.md) · [早期在线验收](docs/reviews/2026-11-06-online-acceptance-next-phase.md)
 
 报告问题时，附上 Windows 版本、操作步骤、出错页面和错误信息；涉及播放时补充作品、集数及是否能重现。请勿提交个人凭据。
 
