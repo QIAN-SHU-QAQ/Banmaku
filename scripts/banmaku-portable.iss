@@ -19,7 +19,7 @@ AppMutex=Local\BanmakuPortableRunning
 SetupMutex=Local\BanmakuPortableSetup
 OutputDir={#PackageOutputDir}
 OutputBaseFilename=Banmaku-{#PackageVersion}-windows-x64-portable
-SetupIconFile=..\windows\runner\resources\app_icon.ico
+SetupIconFile=..\windows\runner\resources\banmaku_icon.ico
 Compression=lzma2/normal
 SolidCompression=yes
 
