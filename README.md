@@ -27,7 +27,7 @@ Banmaku 是用 Flutter 和 media_kit 编写的 Windows 动漫聚合播放器。�
 | 离线播放 | 在沙盒禁止外部联网、测试片源返回 HTTP 503 时，从下载页播放本地文件，并定位到 0:33 和 0:54。 |
 | 开发机在线样本 | 《雾山五行》第 2 集从约 36 秒续播，《轻音少女》第二季第 1 集通过魔都资源播放并保存约 33 秒进度。 |
 
-337 项 Flutter 测试、17 项自动化策略测试和打包脚本边界回归通过。当前兼容性验收覆盖 Windows 11 x64。Windows 10 实机兼容性以及弹弹play 真实鉴权和加载待补测。[CI 验证](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/45181250683) · [开发报告](开发报告.md#发布候选与验收)
+337 项 Flutter 测试、17 项自动化策略测试和打包脚本边界回归通过。当前兼容性验收覆盖 Windows 11 x64。Windows 10 实机兼容性以及弹弹play 真实鉴权和加载待补测。[CI 验证](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/45181250683)
 
 ## 验收记录（2026-11-18）
 
