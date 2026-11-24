@@ -138,7 +138,8 @@ class DatabaseService {
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
-  Future<void> init() async {
+  Future<void> init({Directory? journalDirectory}) async {
+    if (journalDirectory != null) _journalDir = journalDirectory;
     _prefs ??= await SharedPreferences.getInstance();
   }
 

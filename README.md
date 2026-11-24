@@ -224,6 +224,8 @@ powershell -ExecutionPolicy Bypass -File scripts\package-portable.ps1
 
 产物保存在 `dist/`，包括 `Banmaku-<版本>-windows-x64.zip` 和同名 `.sha256` 文件。CI 会在干净的 Windows runner 上执行锁定依赖解析、格式检查、分析、测试、Release 构建和打包。手动触发时可选择创建发布草稿。每次更换候选包后，在干净 Windows 环境复验启动、播放、下载和升级，并记录结果。[Windows 构建工作流](.github/workflows/windows-build.yml)
 
+构建单文件便携安装包时，安装 Inno Setup 6 后向打包脚本传入 `-IncludeInstaller`。CI 同时提供 `Banmaku-<版本>-windows-x64-portable.exe`、ZIP 和两份校验文件。便携安装包的数据随目录移动。[便携模式用法](docs/preview-usage.md#单文件便携安装包)
+
 
 ## 参考
 

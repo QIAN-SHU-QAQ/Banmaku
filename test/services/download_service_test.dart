@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_play/services/download_service.dart';
 import 'package:nova_play/services/m3u8/m3u8_downloader.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _Adapter implements HttpClientAdapter {
@@ -116,6 +117,36 @@ s1.ts
     final file = File(completed.savePath);
     expect(file.existsSync(), isTrue);
     expect(file.readAsBytesSync(), [1, 2, 3, 4, 5]);
+  });
+
+  test('便携下载记录可在移动文件夹后恢复', () async {
+    final original = Directory(p.join(tempDir.path, 'original'));
+    final portable = DownloadService(
+      downloader: M3u8Downloader(dio: Dio()..httpClientAdapter = adapter),
+      portableDownloads: original,
+    );
+    addTearDown(portable.dispose);
+    final task = await portable.addTask(title: '移动测试', url: playlistUrl);
+    await _waitFor(
+      () => portable.tasks.single.status == DownloadStatus.completed,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    final saved = jsonDecode(prefs.getString('downloads_v1')!) as List;
+    final fileName = p.basename(task.savePath);
+    expect(saved.single['savePath'], fileName);
+
+    final moved = await original.rename(p.join(tempDir.path, 'moved'));
+    final reopened = DownloadService(portableDownloads: moved);
+    addTearDown(reopened.dispose);
+    await reopened.init();
+    expect(reopened.tasks.single.savePath, p.join(moved.path, fileName));
+    expect(await File(reopened.tasks.single.savePath).readAsBytes(), [
+      1,
+      2,
+      3,
+      4,
+      5,
+    ]);
   });
 
   test('下载失败标记 failed，补齐数据后可重试成功', () async {

@@ -1,12 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/download_service.dart';
 
+final portableDownloadsProvider = Provider<Directory?>((ref) => null);
+
 /// 下载服务（单例按 Provider 生命周期管理）。
 final downloadServiceProvider = Provider<DownloadService>((ref) {
-  final service = DownloadService();
+  final service = DownloadService(
+    portableDownloads: ref.watch(portableDownloadsProvider),
+  );
   unawaited(service.init());
   ref.onDispose(service.dispose);
   return service;

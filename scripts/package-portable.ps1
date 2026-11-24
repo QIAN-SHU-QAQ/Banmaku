@@ -1,5 +1,5 @@
 ﻿<#
-Build a portable Windows preview ZIP from a release build.
+Build Windows preview packages from a release build.
 
 The package contains the complete runnable directory (exe + DLLs + data),
 LICENSE, README and a Chinese usage note. It refuses to package if required
@@ -10,13 +10,15 @@ Usage (from the repo root, after 'flutter build windows --release'):
 
 Or with explicit paths/version:
   powershell -ExecutionPolicy Bypass -File scripts\package-portable.ps1 `
-      -BuildDir build\windows\x64\runner\Release -OutputDir dist -Version 1.0.0
+      -BuildDir build\windows\x64\runner\Release -OutputDir dist -Version 1.0.0 -IncludeInstaller
 #>
 param(
     [string]$BuildDir = "",
     [string]$OutputDir = "",
     [string]$Version = "",
-    [switch]$SkipContentChecks
+    [switch]$SkipContentChecks,
+    [switch]$IncludeInstaller,
+    [string]$IsccPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -183,6 +185,42 @@ if ($Version -notmatch '^[0-9A-Za-z._\-]+$') {
     throw "版本号只能包含字母、数字、点、下划线和连字符：$Version"
 }
 
+if ($IncludeInstaller) {
+    if ([string]::IsNullOrWhiteSpace($IsccPath)) {
+        $compiler = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+        $IsccPath = if ($compiler) { $compiler.Source } else {
+            Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+        }
+    }
+    if (-not (Test-Path -LiteralPath $IsccPath -PathType Leaf)) {
+        throw "找不到 Inno Setup 的 ISCC.exe，请安装编译器或传入 -IsccPath。"
+    }
+    $IsccPath = (Resolve-Path -LiteralPath $IsccPath).Path
+
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if ($LASTEXITCODE -ne 0 -or -not $visualStudio) {
+        throw '找不到包含 x64 工具链的 Visual Studio。'
+    }
+    $redist = Get-ChildItem -LiteralPath (Join-Path $visualStudio 'VC\Redist\MSVC') -Directory |
+        Where-Object Name -Match '^\d+\.\d+\.\d+$' |
+        Sort-Object { [version]$_.Name } -Descending |
+        Select-Object -First 1
+    if (-not $redist) {
+        throw '找不到 Visual Studio 的 VC++ 再分发目录。'
+    }
+    $crt = Get-ChildItem -LiteralPath (Join-Path $redist.FullName 'x64') -Directory -Filter 'Microsoft.VC*.CRT' |
+        Select-Object -First 1
+    if (-not $crt) {
+        throw '找不到 VC++ x64 CRT DLL。'
+    }
+    foreach ($file in @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $crt.FullName $file) -PathType Leaf)) {
+            throw "缺少 VC++ x64 CRT 文件：$file"
+        }
+    }
+}
+
 $packageName = "Banmaku-$Version-windows-x64"
 $stage = Join-Path $OutputDir $packageName
 $zipPath = Join-Path $OutputDir "$packageName.zip"
@@ -211,6 +249,10 @@ if (Test-Path -LiteralPath $stage) {
 New-Item -ItemType Directory -Path $stage | Out-Null
 
 Copy-Item -Path (Join-Path $BuildDir "*") -Destination $stage -Recurse -Force
+if ($IncludeInstaller) {
+    Get-ChildItem -LiteralPath $crt.FullName -File -Filter '*.dll' |
+        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $stage -Force }
+}
 
 foreach ($doc in @("LICENSE", "README.md")) {
     $source = Join-Path $repoRoot $doc
@@ -229,6 +271,8 @@ $forbiddenPatterns = @(
     "*.pdb",
     "*.tmp",
     "shared_preferences.json",
+    "portable.ini",
+    "bridge_endpoint.json",
     "pending_ops*",
     ".env",
     "*.m3u8",
@@ -287,3 +331,16 @@ Write-Output "Checksum: $shaPath"
 Write-Output "Version : $Version"
 Write-Output "Files   : $fileCount"
 Write-Output "Size    : $sizeMb MB"
+
+if ($IncludeInstaller) {
+    $installerPath = Join-Path $OutputDir "$packageName-portable.exe"
+    $definition = Join-Path $PSScriptRoot 'banmaku-portable.iss'
+    & $IsccPath '/Qp' "/DPackageVersion=$Version" "/DPayloadDir=$stage" "/DPackageOutputDir=$OutputDir" $definition
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
+        throw 'Inno Setup 未能生成便携安装包。'
+    }
+    $installerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    Set-Content -LiteralPath "$installerPath.sha256" -Value "$installerHash  $packageName-portable.exe" -Encoding ASCII
+    Write-Output "Installer: $installerPath"
+    Write-Output "SHA-256  : $installerHash"
+}

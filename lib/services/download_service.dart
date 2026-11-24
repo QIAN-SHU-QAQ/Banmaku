@@ -4,10 +4,12 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'm3u8/m3u8_downloader.dart';
+import 'portable_profile.dart';
 
 /// 下载任务状态。
 enum DownloadStatus {
@@ -128,14 +130,17 @@ class DownloadService {
   DownloadService({
     M3u8Downloader? downloader,
     Future<Directory> Function()? baseDirectory,
+    Directory? portableDownloads,
   }) : _downloader = downloader ?? M3u8Downloader(),
-       _baseDirectory = baseDirectory ?? getApplicationDocumentsDirectory;
+       _baseDirectory = baseDirectory ?? getApplicationDocumentsDirectory,
+       _portableDownloads = portableDownloads;
 
   static const String _storageKey = 'downloads_v1';
   static const int maxConcurrent = 2;
 
   final M3u8Downloader _downloader;
   final Future<Directory> Function() _baseDirectory;
+  final Directory? _portableDownloads;
 
   final List<DownloadTask> _tasks = [];
   final List<String> _queue = [];
@@ -159,6 +164,13 @@ class DownloadService {
         for (final item in list) {
           if (item is! Map<String, dynamic>) continue;
           var task = DownloadTask.fromJson(item);
+          final portable = _portableDownloads;
+          if (portable != null) {
+            if (!isPortableDownloadName(task.savePath)) continue;
+            task = task.copyWith(
+              savePath: p.join(portable.path, task.savePath),
+            );
+          }
           // 上次退出时仍在进行中的任务：重启后标记为暂停，等待用户继续。
           if (task.status.isActive) {
             task = task.copyWith(status: DownloadStatus.paused);
@@ -183,7 +195,7 @@ class DownloadService {
     await init();
     final dir = await _downloadsDirectory();
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final savePath = '${dir.path}/${_safeFileName(title)}-$id.ts';
+    final savePath = p.join(dir.path, '${_safeFileName(title)}-$id.ts');
     final task = DownloadTask(
       id: id,
       title: title,
@@ -317,8 +329,11 @@ class DownloadService {
   }
 
   Future<Directory> _downloadsDirectory() async {
-    final base = await _baseDirectory();
-    final dir = Directory('${base.path}/NovaPlay/Downloads');
+    final dir =
+        _portableDownloads ??
+        Directory(
+          p.join((await _baseDirectory()).path, 'NovaPlay', 'Downloads'),
+        );
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -341,7 +356,15 @@ class DownloadService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         _storageKey,
-        jsonEncode(_tasks.map((t) => t.toJson()).toList()),
+        jsonEncode(
+          _tasks.map((task) {
+            final json = task.toJson();
+            if (_portableDownloads != null) {
+              json['savePath'] = p.basename(task.savePath);
+            }
+            return json;
+          }).toList(),
+        ),
       );
     } catch (e) {
       debugPrint('保存下载任务失败: $e');
