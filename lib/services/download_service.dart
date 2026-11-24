@@ -332,7 +332,7 @@ class DownloadService {
     final dir =
         _portableDownloads ??
         Directory(
-          p.join((await _baseDirectory()).path, 'NovaPlay', 'Downloads'),
+          p.join((await _baseDirectory()).path, 'Banmaku', 'Downloads'),
         );
     if (!await dir.exists()) {
       await dir.create(recursive: true);

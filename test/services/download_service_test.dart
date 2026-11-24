@@ -5,8 +5,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/services/download_service.dart';
-import 'package:nova_play/services/m3u8/m3u8_downloader.dart';
+import 'package:banmaku/services/download_service.dart';
+import 'package:banmaku/services/m3u8/m3u8_downloader.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 

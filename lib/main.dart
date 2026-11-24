@@ -18,6 +18,7 @@ import 'providers/download_provider.dart';
 import 'services/database_service.dart';
 import 'services/portable_profile.dart';
 import 'services/prefs_bridge.dart';
+import 'services/windows_profile.dart';
 
 /// 主窗口与独立播放进程共用同一个入口。
 ///
@@ -32,32 +33,46 @@ Future<void> main(List<String> args) async {
       Platform.isWindows
           ? PortableProfile.detect(Platform.resolvedExecutable)
           : null;
-  if (portable != null) {
-    try {
+  try {
+    if (portable != null) {
       if (playerArgIndex < 0) await _initializePortableProfile(portable);
       SharedPreferencesStorePlatform.instance = PortablePreferences(
         portable.preferences,
       );
       await DatabaseService().init(journalDirectory: portable.journals);
-    } catch (error) {
-      runApp(
-        MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  '无法打开 Banmaku 的便携数据。请检查文件夹是否可写或是否有足够空间，然后重新启动。\n\n$error',
-                ),
+    } else {
+      if (Platform.isWindows && playerArgIndex < 0) {
+        final legacy = await legacyWindowsSupportDirectory();
+        if (legacy != null) {
+          await migrateWindowsProfile(
+            legacy: legacy,
+            current: await getApplicationSupportDirectory(),
+          );
+        }
+      }
+      await DatabaseService().init();
+    }
+  } catch (error) {
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                '无法打开 Banmaku 的用户数据。请检查文件夹是否可写或是否有足够空间，然后重新启动。\n\n$error',
               ),
             ),
           ),
         ),
-      );
-      return;
+      ),
+    );
+    if (Platform.isWindows) {
+      await windowManager.ensureInitialized();
+      await WidgetsBinding.instance.waitUntilFirstFrameRasterized;
+      await windowManager.show();
     }
-  } else {
-    await DatabaseService().init();
+    return;
   }
 
   if (playerArgIndex >= 0) {
@@ -134,7 +149,7 @@ Future<void> main(List<String> args) async {
         if (portable != null)
           portableDownloadsProvider.overrideWithValue(portable.downloads),
       ],
-      child: NovaPlayApp(desktopWindowManager: desktopWindowManager),
+      child: BanmakuApp(desktopWindowManager: desktopWindowManager),
     ),
   );
 
@@ -150,9 +165,16 @@ Future<void> _initializePortableProfile(PortableProfile profile) async {
   if (!await profile.importRequest.exists()) return;
   final support = await getApplicationSupportDirectory();
   final documents = await getApplicationDocumentsDirectory();
+  final preferences = File(p.join(support.path, 'shared_preferences.json'));
+  final legacy = await legacyWindowsSupportDirectory();
   await profile.importLegacy(
-    File(p.join(support.path, 'shared_preferences.json')),
-    Directory(p.join(documents.path, 'NovaPlay', 'Downloads')),
+    !await preferences.exists() && legacy != null
+        ? File(p.join(legacy.path, 'shared_preferences.json'))
+        : preferences,
+    [
+      Directory(p.join(documents.path, appDisplayName, 'Downloads')),
+      legacyWindowsDownloads(documents),
+    ],
   );
   await profile.importRequest.delete();
 }

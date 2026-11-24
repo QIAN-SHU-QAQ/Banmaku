@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/features/detail/detail_screen.dart';
-import 'package:nova_play/models/bangumi_info.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/providers/bangumi_provider.dart';
-import 'package:nova_play/providers/video_provider.dart';
-import 'package:nova_play/services/bangumi_api.dart';
-import 'package:nova_play/services/database_service.dart';
+import 'package:banmaku/features/detail/detail_screen.dart';
+import 'package:banmaku/models/bangumi_info.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/providers/bangumi_provider.dart';
+import 'package:banmaku/providers/video_provider.dart';
+import 'package:banmaku/services/bangumi_api.dart';
+import 'package:banmaku/services/database_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _EmptySearchApi extends BangumiApi {

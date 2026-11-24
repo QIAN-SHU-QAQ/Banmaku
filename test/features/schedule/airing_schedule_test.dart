@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/features/schedule/airing_schedule.dart';
+import 'package:banmaku/features/schedule/airing_schedule.dart';
 
 void main() {
   test(

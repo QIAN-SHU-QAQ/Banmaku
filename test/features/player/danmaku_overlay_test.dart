@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/features/player/widgets/danmaku_overlay.dart';
-import 'package:nova_play/models/danmaku_model.dart';
+import 'package:banmaku/features/player/widgets/danmaku_overlay.dart';
+import 'package:banmaku/models/danmaku_model.dart';
 
 void main() {
   testWidgets('DanmakuOverlay 按进度投递弹幕且不抛异常', (tester) async {

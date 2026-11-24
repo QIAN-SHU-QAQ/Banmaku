@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/providers/scraper_provider.dart';
-import 'package:nova_play/providers/search_provider.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/providers/scraper_provider.dart';
+import 'package:banmaku/providers/search_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../fakes.dart';

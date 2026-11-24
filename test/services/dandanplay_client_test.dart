@@ -4,8 +4,8 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/models/danmaku_model.dart';
-import 'package:nova_play/services/danmaku/dandanplay_client.dart';
+import 'package:banmaku/models/danmaku_model.dart';
+import 'package:banmaku/services/danmaku/dandanplay_client.dart';
 
 class _FakeHttpAdapter implements HttpClientAdapter {
   _FakeHttpAdapter(this.responses);

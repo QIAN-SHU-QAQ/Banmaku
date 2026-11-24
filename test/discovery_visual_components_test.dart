@@ -3,10 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/core/config/theme.dart';
-import 'package:nova_play/features/home/widgets/video_card.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/shared/widgets/poster_card.dart';
+import 'package:banmaku/core/config/theme.dart';
+import 'package:banmaku/features/home/widgets/video_card.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/shared/widgets/poster_card.dart';
 
 void main() {
   test('dark discovery colors use mulberry surfaces and iris progress', () {

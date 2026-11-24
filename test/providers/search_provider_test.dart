@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nova_play/features/search/search_screen.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/providers/scraper_provider.dart';
-import 'package:nova_play/providers/search_provider.dart';
+import 'package:banmaku/features/search/search_screen.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/providers/scraper_provider.dart';
+import 'package:banmaku/providers/search_provider.dart';
 
 import '../fakes.dart';
 

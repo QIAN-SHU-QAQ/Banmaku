@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.novaplay" "\0"
+            VALUE "CompanyName", "Banmaku" "\0"
             VALUE "FileDescription", "Banmaku" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "nova_play" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.novaplay. All rights reserved." "\0"
-            VALUE "OriginalFilename", "nova_play.exe" "\0"
-            VALUE "ProductName", "nova_play" "\0"
+            VALUE "InternalName", "Banmaku" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Banmaku. All rights reserved." "\0"
+            VALUE "OriginalFilename", "Banmaku.exe" "\0"
+            VALUE "ProductName", "Banmaku" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

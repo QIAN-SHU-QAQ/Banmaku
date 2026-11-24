@@ -9,15 +9,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:nova_play/core/utils/play_launcher.dart';
-import 'package:nova_play/features/download/download_screen.dart';
-import 'package:nova_play/features/player/player_screen.dart';
-import 'package:nova_play/features/player/player_window.dart';
-import 'package:nova_play/models/history_item.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/providers/scraper_provider.dart';
-import 'package:nova_play/services/database_service.dart';
-import 'package:nova_play/services/download_service.dart';
+import 'package:banmaku/core/utils/play_launcher.dart';
+import 'package:banmaku/features/download/download_screen.dart';
+import 'package:banmaku/features/player/player_screen.dart';
+import 'package:banmaku/features/player/player_window.dart';
+import 'package:banmaku/models/history_item.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/providers/scraper_provider.dart';
+import 'package:banmaku/services/database_service.dart';
+import 'package:banmaku/services/download_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'playback_session_test.dart' show FakePlatform;
 
@@ -182,7 +182,7 @@ void main() {
 
     testWidgets('下载页播放已有文件时，播放窗口显示本地文件', (tester) async {
       final directory = Directory.systemTemp.createTempSync(
-        'nova-player-test-',
+        'banmaku-player-test-',
       );
       final file = File('${directory.path}/episode.ts')..writeAsBytesSync([1]);
       addTearDown(() {

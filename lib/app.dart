@@ -14,16 +14,16 @@ import 'providers/theme_provider.dart';
 import 'services/database_service.dart';
 import 'services/prefs_bridge.dart';
 
-class NovaPlayApp extends ConsumerStatefulWidget {
-  const NovaPlayApp({super.key, this.desktopWindowManager});
+class BanmakuApp extends ConsumerStatefulWidget {
+  const BanmakuApp({super.key, this.desktopWindowManager});
 
   final WindowManager? desktopWindowManager;
 
   @override
-  ConsumerState<NovaPlayApp> createState() => _NovaPlayAppState();
+  ConsumerState<BanmakuApp> createState() => _BanmakuAppState();
 }
 
-class _NovaPlayAppState extends ConsumerState<NovaPlayApp>
+class _BanmakuAppState extends ConsumerState<BanmakuApp>
     with WidgetsBindingObserver {
   StreamSubscription<Set<String>>? _bridgeSubscription;
 

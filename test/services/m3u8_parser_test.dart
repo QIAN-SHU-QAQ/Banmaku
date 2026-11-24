@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/services/m3u8/m3u8_parser.dart';
+import 'package:banmaku/services/m3u8/m3u8_parser.dart';
 
 void main() {
   group('media playlist', () {

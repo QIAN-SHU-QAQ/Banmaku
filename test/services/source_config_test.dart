@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/services/scraper/source_config.dart';
+import 'package:banmaku/services/scraper/source_config.dart';
 
 void main() {
   test('内置默认源：两个且默认启用', () {

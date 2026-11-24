@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/core/utils/episode_identity.dart';
+import 'package:banmaku/core/utils/episode_identity.dart';
 
 void main() {
   test('R5：位置生成的 ep_N 不算稳定剧集 ID', () {

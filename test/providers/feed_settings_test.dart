@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/providers/home_provider.dart';
-import 'package:nova_play/providers/settings_provider.dart';
-import 'package:nova_play/services/database_service.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/providers/home_provider.dart';
+import 'package:banmaku/providers/settings_provider.dart';
+import 'package:banmaku/services/database_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../fakes.dart';

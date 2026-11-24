@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/providers/danmaku_provider.dart';
-import 'package:nova_play/services/database_service.dart';
+import 'package:banmaku/providers/danmaku_provider.dart';
+import 'package:banmaku/services/database_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

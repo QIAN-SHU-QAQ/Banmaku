@@ -66,7 +66,7 @@ class BangumiApi {
               receiveTimeout: const Duration(seconds: 12),
               headers: {
                 'User-Agent':
-                    'NovaPlay/1.0 (https://github.com/QIAN-SHU-QAQ/NovaPlay)',
+                    'Banmaku/1.0 (https://github.com/QIAN-SHU-QAQ/Banmaku)',
                 'Accept': 'application/json',
               },
             ),

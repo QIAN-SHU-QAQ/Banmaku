@@ -139,7 +139,7 @@ if ($forbiddenRoots -contains $OutputDir.TrimEnd('\')) {
 
 # ---- required runtime files ----
 $requiredFiles = @(
-    "nova_play.exe",
+    "Banmaku.exe",
     "flutter_windows.dll"
 )
 $requiredDirs = @("data")
@@ -248,7 +248,8 @@ if (Test-Path -LiteralPath $stage) {
 }
 New-Item -ItemType Directory -Path $stage | Out-Null
 
-Copy-Item -Path (Join-Path $BuildDir "*") -Destination $stage -Recurse -Force
+# A renamed target can leave the preview executable in an incremental build.
+Copy-Item -Path (Join-Path $BuildDir "*") -Destination $stage -Recurse -Force -Exclude 'nova_play.exe'
 if ($IncludeInstaller) {
     Get-ChildItem -LiteralPath $crt.FullName -File -Filter '*.dll' |
         ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $stage -Force }
@@ -271,6 +272,7 @@ $forbiddenPatterns = @(
     "*.pdb",
     "*.tmp",
     "shared_preferences.json",
+    "nova_play.exe",
     "portable.ini",
     "bridge_endpoint.json",
     "pending_ops*",
@@ -292,11 +294,11 @@ if ($forbidden.Count -gt 0) {
 }
 
 # ---- final staging validation: never produce a ZIP without runnable files ----
-$stageExe = Join-Path $stage "nova_play.exe"
+$stageExe = Join-Path $stage "Banmaku.exe"
 $stageDll = Join-Path $stage "flutter_windows.dll"
 $stageData = Join-Path $stage "data"
 if (-not (Test-Path -LiteralPath $stageExe -PathType Leaf)) {
-    throw "staging 缺少 nova_play.exe，拒绝生成 ZIP：$stage"
+    throw "staging 缺少 Banmaku.exe，拒绝生成 ZIP：$stage"
 }
 if (-not (Test-Path -LiteralPath $stageDll -PathType Leaf)) {
     throw "staging 缺少 flutter_windows.dll，拒绝生成 ZIP：$stage"
@@ -308,7 +310,7 @@ if (-not (Get-ChildItem -LiteralPath $stageData -Recurse -File | Select-Object -
     throw "staging 的 data 目录为空，拒绝生成 ZIP：$stage"
 }
 # The source must still be intact after staging (guards against path overlap bugs).
-if (-not (Test-Path -LiteralPath (Join-Path $BuildDir "nova_play.exe") -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath (Join-Path $BuildDir "Banmaku.exe") -PathType Leaf)) {
     throw "打包过程中 BuildDir 被修改/删除：$BuildDir"
 }
 

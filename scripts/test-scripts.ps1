@@ -38,7 +38,7 @@ function New-TempRoot([string]$Name) {
 function New-FakeBuild([string]$Dir) {
     New-Item -ItemType Directory -Path $Dir -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $Dir "data\flutter_assets") -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $Dir "nova_play.exe") -Value "fake exe" -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $Dir "Banmaku.exe") -Value "fake exe" -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $Dir "flutter_windows.dll") -Value "fake dll" -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $Dir "data\app.so") -Value "fake aot" -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $Dir "data\icudtl.dat") -Value "fake icu" -Encoding ASCII
@@ -46,7 +46,7 @@ function New-FakeBuild([string]$Dir) {
 }
 
 function Test-SourceIntact([string]$Name, [string]$Dir) {
-    $exe = Join-Path $Dir "nova_play.exe"
+    $exe = Join-Path $Dir "Banmaku.exe"
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
         $script:failures += "$Name：失败后源目录被破坏：$Dir"
         Write-Host "FAIL: $Name (source destroyed)"
@@ -104,6 +104,7 @@ try {
     $root3 = New-TempRoot "pkg_success"
     $build3 = Join-Path $root3 "build"
     New-FakeBuild $build3
+    Set-Content -LiteralPath (Join-Path $build3 'nova_play.exe') -Value 'old incremental output' -Encoding ASCII
     $out3 = Join-Path $root3 "dist"
     & $packageScript -BuildDir $build3 -OutputDir $out3 -Version "9.9.9" *> $null
     $zip3 = Join-Path $out3 "Banmaku-9.9.9-windows-x64.zip"
@@ -119,13 +120,13 @@ try {
         $archive = [System.IO.Compression.ZipFile]::OpenRead($zip3)
         $entryNames = @($archive.Entries | ForEach-Object { $_.FullName })
         $archive.Dispose()
-        $hasExe = $entryNames -contains "nova_play.exe"
+        $hasExe = $entryNames -contains "Banmaku.exe"
         $hasData = @($entryNames | Where-Object { $_ -like "data*" }).Count -gt 0
-        if ($hasExe -and $hasData) {
+        if ($hasExe -and $hasData -and $entryNames -notcontains 'nova_play.exe') {
             Write-Host "PASS: package success (zip + sha256 + exe/data)"
         } else {
-            $script:failures += "package: 成功用例的 ZIP 缺少运行文件"
-            Write-Host "FAIL: package success (missing runnable files)"
+            $script:failures += "package: ZIP 缺少运行文件或包含旧版程序"
+            Write-Host "FAIL: package success (unexpected runnable files)"
         }
     }
 

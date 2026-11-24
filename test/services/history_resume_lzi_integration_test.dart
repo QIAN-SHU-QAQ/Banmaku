@@ -3,13 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/core/utils/episode_identity.dart';
-import 'package:nova_play/core/utils/history_resume.dart';
-import 'package:nova_play/models/history_item.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/services/database_service.dart';
-import 'package:nova_play/services/scraper/lziapi_scraper.dart';
-import 'package:nova_play/services/scraper/source_config.dart';
+import 'package:banmaku/core/utils/episode_identity.dart';
+import 'package:banmaku/core/utils/history_resume.dart';
+import 'package:banmaku/models/history_item.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/services/database_service.dart';
+import 'package:banmaku/services/scraper/lziapi_scraper.dart';
+import 'package:banmaku/services/scraper/source_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 用真实 LziApiScraper + 本地 HTTP 替身验证：解析器按位置生成 ep_N，

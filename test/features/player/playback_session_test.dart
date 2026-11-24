@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:nova_play/features/player/playback_session.dart';
+import 'package:banmaku/features/player/playback_session.dart';
 
 class FakePlatform extends PlatformPlayer {
   FakePlatform() : super(configuration: const PlayerConfiguration());

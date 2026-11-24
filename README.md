@@ -2,7 +2,7 @@
 
 Banmaku 是用 Flutter 和 media_kit 编写的 Windows 动漫聚合播放器。可以从 Bangumi 作品库发现和搜索动画，按作品查找片源、选集播放，也能收藏作品并从观看历史接着看。
 
-**Windows x64 下载 · Preview 3** [便携安装包（EXE）](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/download/v1.0.0-preview.3/Banmaku-1.0.0-preview.3-windows-x64-portable.exe) · [ZIP 解压版](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/download/v1.0.0-preview.3/Banmaku-1.0.0-preview.3-windows-x64.zip) · [发布说明与 SHA-256 校验文件](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/tag/v1.0.0-preview.3)
+**Windows x64 下载 · 1.0.0** [便携安装包（EXE）](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/download/v1.0.0/Banmaku-1.0.0-windows-x64-portable.exe) · [ZIP 解压版](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/download/v1.0.0/Banmaku-1.0.0-windows-x64.zip) · [发布说明与 SHA-256 校验文件](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/latest)
 
 <details>
 <summary>查看早期版本界面（2026-10-30）</summary>
@@ -13,11 +13,11 @@ Banmaku 是用 Flutter 和 media_kit 编写的 Windows 动漫聚合播放器。�
 
 </details>
 
-[Preview 2 验收](#preview-2-验收) · [预览版安装](#windows-预览版安装) · [预览版说明](docs/preview-notes.md) · [从源码运行](#从源码运行) · [开发报告](开发报告.md) · [反馈问题](https://github.com/QIAN-SHU-QAQ/Banmaku/issues)
+[Windows 安装](#windows-安装) · [版本说明](docs/preview-notes.md) · [从源码运行](#从源码运行) · [开发报告](开发报告.md) · [Preview 2 验收](#preview-2-验收) · [反馈问题](https://github.com/QIAN-SHU-QAQ/Banmaku/issues)
 
 ## Preview 2 验收
 
-验收使用 GitHub Actions 从 PR #18 提交 `d616898` 构建的 `Banmaku-1.0.0-preview.2-windows-x64.zip`。已公开的 ZIP 与验收包的 SHA-256 一致。[Windows 构建与打包](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/45181182911)
+验收使用 GitHub Actions 从 PR #18 提交 `d616898` 构建的 `Banmaku-1.0.0-preview.2-windows-x64.zip`。当时发布的 ZIP 与验收包的 SHA-256 一致。[Windows 构建与打包](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/45181182911)
 
 | 场景 | 实测结果 |
 | --- | --- |
@@ -39,12 +39,12 @@ Windows 实机确认在线发现、搜索、详情、收藏、选集、播放和
 
 沙盒验收使用沙盒内的 HTTP 测试源。下载和离线播放使用 Mux 公开的《Big Buck Bunny》HLS 分片，可以控制分片响应速度，并在下载完成后停用片源。3 分钟定位使用单独生成的 4 分钟测试视频。[Mux 测试播放列表](https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8) · [影片来源](https://peach.blender.org/about/)
 
-## Windows 预览版安装
+## Windows 安装
 
-- **便携安装包（EXE）**。校验后双击，选择可写目录，解压完成后从 `app\nova_play.exe` 启动。观看历史、收藏、设置和下载保存在 `UserData`，可以随整个文件夹移动。更新时先退出主窗口和所有播放器，再选择原目录。
-- **ZIP 解压版**。校验后解压，运行目录中的 `nova_play.exe`。ZIP 继续使用当前 Windows 用户配置，可以读取已有的观看历史、收藏和设置。
+- **便携安装包（EXE）**。校验后双击，选择可写目录，解压完成后从 `app\Banmaku.exe` 启动。观看历史、收藏、设置和下载保存在 `UserData`，可以随整个文件夹移动。更新时先退出主窗口和所有播放器，再选择原目录。
+- **ZIP 解压版**。校验后解压，运行目录中的 `Banmaku.exe`。ZIP 继续使用当前 Windows 用户配置，可以读取已有的观看历史、收藏和设置。
 
-Preview 3 随包提供所需的 VC++ DLL。当前验收覆盖 Windows 11 x64，安装包未签名。[完整使用说明](docs/preview-usage.md)
+1.0.0 随包提供所需的 VC++ DLL。当前验收覆盖 Windows 11 x64，安装包未签名。[完整使用说明](docs/preview-usage.md)
 
 ## 现在能做什么
 
@@ -83,9 +83,9 @@ Banmaku 默认启用 `LziApi`（`cj.lziapi.com`）和 `360zy`（`360zy.com`）�
 
 弹幕为可选功能。请在「设置 → 弹幕 → 弹弹play 账号」填写 AppId/AppSecret。播放器右侧会显示匹配结果或缺少凭据的提示。自动匹配会参考作品名、季数和集数，用户也可以手动选择。[弹弹play 开发者中心](https://dev.dandanplay.com)
 
-详情页选集卡片旁的下载按钮可加入队列，下载页支持暂停、继续、删除和在文件夹中显示，任务在重启后保留。完成后点击任务即可在应用内播放，也可用第三方播放器打开保存的 `.ts` 文件。文件默认保存在系统“文档”目录下的 `NovaPlay/Downloads/`。当前支持未加密、以完整 TS 分片提供的 HLS 点播。
+详情页选集卡片旁的下载按钮可加入队列，下载页支持暂停、继续、删除和在文件夹中显示，任务在重启后保留。完成后点击任务即可在应用内播放，也可用第三方播放器打开保存的 `.ts` 文件。文件默认保存在系统“文档”目录下的 `Banmaku/Downloads/`。当前支持未加密、以完整 TS 分片提供的 HLS 点播。
 
-设置页可保存主题、配置自动连播与默认倍速，并可在「源管理」中启停、测试、添加或删除数据源。预览版更新通过 GitHub Releases 提供。
+设置页可保存主题、配置自动连播与默认倍速，并可在「源管理」中启停、测试、添加或删除数据源。版本更新通过 GitHub Releases 提供。
 
 收藏和观看历史保存在本机。续播会从原片源刷新原集和进度。无法确认原集时，可重试或换源搜索同一片名，再手动选择季和集。新片源的进度会单独保存。
 
@@ -183,7 +183,7 @@ flutter build windows --release
 
 **真实弹幕服务仍未完成验收**：没有有效的弹弹play AppId/AppSecret，尚未验证真实服务的鉴权、匹配和滚动效果。以上通过结论限定于列出的检查与操作场景。
 
-构建目录为 `build/windows/x64/runner/Release/`。运行或复制程序时，请保留整个目录，包括 DLL 和 `data/`；只复制 `nova_play.exe` 无法正常运行。
+构建目录为 `build/windows/x64/runner/Release/`。运行或复制程序时，请保留整个目录，包括 DLL 和 `data/`；只复制 `Banmaku.exe` 无法正常运行。
 
 ### Windows 播放失败排查（Low 完整性标签）
 
@@ -204,7 +204,7 @@ icacls "E:\项目\Banmaku\运行版" /T | Select-String "Mandatory Label"
 icacls "E:\项目\Banmaku\运行版" /setintegritylevel Medium /T
 ```
 
-修复后重新启动应用，任务管理器中 `nova_play.exe` 的完整性级别应为「中等 / Medium」。以后每次构建并复制到运行目录后，如果构建环境是沙箱（或用脚本部署），都需要重新执行这条命令；仓库里的 `scripts/deploy-release.ps1` 会自动完成复制、修正标签和更新快捷方式：
+修复后重新启动应用，任务管理器中 `Banmaku.exe` 的完整性级别应为「中等 / Medium」。以后每次构建并复制到运行目录后，如果构建环境是沙箱（或用脚本部署），都需要重新执行这条命令；仓库里的 `scripts/deploy-release.ps1` 会自动完成复制、修正标签和更新快捷方式：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\deploy-release.ps1

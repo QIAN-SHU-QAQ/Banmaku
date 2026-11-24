@@ -45,8 +45,8 @@ ReadyMemoDir=便携目录
 ReadyMemoTasks=数据导入
 InstallingLabel=正在解压 Banmaku，请稍候。
 FinishedHeadingLabel=Banmaku 已就绪
-FinishedLabelNoIcons=可以从所选文件夹中的 app\nova_play.exe 启动 Banmaku。
-FinishedLabel=可以从所选文件夹中的 app\nova_play.exe 启动 Banmaku。
+FinishedLabelNoIcons=可以从所选文件夹中的 app\Banmaku.exe 启动 Banmaku。
+FinishedLabel=可以从所选文件夹中的 app\Banmaku.exe 启动 Banmaku。
 
 [Tasks]
 Name: "importlocal"; Description: "首次启动时复制已有观看记录、收藏、设置和下载"; Flags: unchecked
@@ -55,7 +55,7 @@ Name: "importlocal"; Description: "首次启动时复制已有观看记录、收
 Source: "{#PayloadDir}\*"; DestDir: "{code:GetStagingDirectory}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Run]
-Filename: "{app}\app\nova_play.exe"; WorkingDir: "{app}\app"; Description: "启动 Banmaku"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\app\Banmaku.exe"; WorkingDir: "{app}\app"; Description: "启动 Banmaku"; Flags: postinstall nowait skipifsilent
 
 [Code]
 var
@@ -66,10 +66,17 @@ begin
   Result := StagingDirectory;
 end;
 
+function ExistingProgram(const Directory: String): String;
+begin
+  Result := Directory + '\Banmaku.exe';
+  if not FileExists(Result) then
+    Result := Directory + '\nova_play.exe';
+end;
+
 function IsBanmakuProgram(const Directory: String): Boolean;
 begin
   Result := FileExists(Directory + '\portable.ini') and
-    FileExists(Directory + '\nova_play.exe');
+    FileExists(ExistingProgram(Directory));
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -121,7 +128,7 @@ begin
   Previous := Root + '\app.previous';
   Data := Root + '\UserData';
 
-  if not (FileExists(StagingDirectory + '\nova_play.exe') and
+  if not (FileExists(StagingDirectory + '\Banmaku.exe') and
           FileExists(StagingDirectory + '\flutter_windows.dll') and
           FileExists(StagingDirectory + '\data\app.so') and
           SaveStringToFile(StagingDirectory + '\portable.ini', '[Banmaku]' + #13#10, False)) then
@@ -142,7 +149,7 @@ begin
   if not RenameFile(StagingDirectory, Current) then
   begin
     if BackedUp and not RenameFile(Previous, Current) then
-      RaiseException('The update stopped. Run app.previous\nova_play.exe to use the previous version.');
+      RaiseException('The update stopped. Start the previous program at ' + ExistingProgram(Previous) + '.');
     RaiseException('Could not activate the new program. Run Setup again to retry.');
   end;
   StagingDirectory := '';

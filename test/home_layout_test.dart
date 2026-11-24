@@ -7,15 +7,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nova_play/core/config/theme.dart';
-import 'package:nova_play/features/home/home_screen.dart';
-import 'package:nova_play/features/home/widgets/category_tabs.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/models/history_item.dart';
-import 'package:nova_play/providers/home_provider.dart';
-import 'package:nova_play/providers/history_provider.dart';
-import 'package:nova_play/providers/scraper_provider.dart';
-import 'package:nova_play/shared/widgets/poster_card.dart';
+import 'package:banmaku/core/config/theme.dart';
+import 'package:banmaku/features/home/home_screen.dart';
+import 'package:banmaku/features/home/widgets/category_tabs.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/models/history_item.dart';
+import 'package:banmaku/providers/home_provider.dart';
+import 'package:banmaku/providers/history_provider.dart';
+import 'package:banmaku/providers/scraper_provider.dart';
+import 'package:banmaku/shared/widgets/poster_card.dart';
 
 import 'fakes.dart';
 

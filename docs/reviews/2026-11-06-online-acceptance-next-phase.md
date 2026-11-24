@@ -1,6 +1,6 @@
-# NovaPlay 在线验收与下一阶段开发计划
+# Banmaku 在线验收与下一阶段开发计划
 
-验收日期为 2026-11-06，基线为 Windows Release 和 GitHub `main` 的 `689f8dd485380b18903ed41b02d0250e451fbdb4`。本轮使用独立应用配置、真实网络和公开 HLS 测试样片。每项工作单独提交 PR，先记录失败样例，再以专项回归和合并后实机结果收口。[基线提交](https://github.com/QIAN-SHU-QAQ/NovaPlay/commit/689f8dd485380b18903ed41b02d0250e451fbdb4) · [基线 CI](https://github.com/QIAN-SHU-QAQ/NovaPlay/actions/runs/42163036020)
+验收日期为 2026-11-06，基线为 Windows Release 和 GitHub `main` 的 `689f8dd485380b18903ed41b02d0250e451fbdb4`。本轮使用独立应用配置、真实网络和公开 HLS 测试样片。每项工作单独提交 PR，先记录失败样例，再以专项回归和合并后实机结果收口。[基线提交](https://github.com/QIAN-SHU-QAQ/Banmaku/commit/689f8dd485380b18903ed41b02d0250e451fbdb4) · [基线 CI](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/42163036020)
 
 **目标** 先修复在线续播覆盖旧进度，再完成外部服务降级和 Windows 预览版验收，最后推进追番功能。
 
@@ -32,7 +32,7 @@
 - [ ] 执行 `flutter test test/features/player/playback_session_test.dart test/features/player/player_screen_test.dart test/home_layout_test.dart test/services/history_resume_test.dart`。专项测试通过后跑完整测试、分析和 Windows Release 构建。
 - [ ] Windows 实机用两种样本确认。用可控源模拟旧地址失效和新地址替换，再用公开在线 HLS 验证原生起点。首页、历史、收藏分别从第 2 集约 180 秒继续，首次稳定画面位置落在 178–185 秒，历史随后向前写入。失败或取消时保持原进度。现有配置桥重连及 20 秒旧记录保护、主动回退 5 秒的回归同时通过。
 
-**发布门槛进展（2026-11-17）** #14 已合入，打开首页、历史和收藏的第 2 集续播入口均通过 Windows 验收，首次历史写回分别为 182566、182633 和 182500 ms。首个预览版仍待干净 Windows 环境验收。[合并记录](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/14) · [实机批准记录](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/14#pullrequestreview-5934123910)
+**发布门槛进展（2026-11-17）** #14 已合入，打开首页、历史和收藏的第 2 集续播入口均通过 Windows 验收，首次历史写回分别为 182566、182633 和 182500 ms。首个预览版仍待干净 Windows 环境验收。[合并记录](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/14) · [实机批准记录](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/14#pullrequestreview-5934123910)
 
 ## PR 2 · P1 · 外部资料失败可见，手动纠正可达
 
