@@ -6,18 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nova_play/app.dart';
-import 'package:nova_play/core/network/http_client.dart';
-import 'package:nova_play/features/search/search_screen.dart';
-import 'package:nova_play/features/search/widgets/search_result_preview.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/providers/bangumi_provider.dart';
-import 'package:nova_play/providers/home_provider.dart';
-import 'package:nova_play/providers/scraper_provider.dart';
-import 'package:nova_play/providers/search_provider.dart';
-import 'package:nova_play/services/database_service.dart';
-import 'package:nova_play/services/bangumi_api.dart';
-import 'package:nova_play/shared/widgets/poster_card.dart';
+import 'package:banmaku/app.dart';
+import 'package:banmaku/core/network/http_client.dart';
+import 'package:banmaku/features/search/search_screen.dart';
+import 'package:banmaku/features/search/widgets/search_result_preview.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/providers/bangumi_provider.dart';
+import 'package:banmaku/providers/home_provider.dart';
+import 'package:banmaku/providers/scraper_provider.dart';
+import 'package:banmaku/providers/search_provider.dart';
+import 'package:banmaku/services/database_service.dart';
+import 'package:banmaku/services/bangumi_api.dart';
+import 'package:banmaku/shared/widgets/poster_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fakes.dart';
@@ -410,7 +410,7 @@ void main() {
           ),
           discoveryPageLoaderProvider.overrideWithValue(emptyDiscoveryPage),
         ],
-        child: const NovaPlayApp(),
+        child: const BanmakuApp(),
       ),
     );
     await tester.pumpAndSettle();

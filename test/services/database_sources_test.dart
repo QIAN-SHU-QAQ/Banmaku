@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:nova_play/models/history_item.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/services/database_service.dart';
-import 'package:nova_play/services/scraper/source_config.dart';
+import 'package:banmaku/models/history_item.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/services/database_service.dart';
+import 'package:banmaku/services/scraper/source_config.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

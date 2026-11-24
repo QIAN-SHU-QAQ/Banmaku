@@ -1,5 +1,5 @@
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/services/scraper/base_scraper.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/services/scraper/base_scraper.dart';
 
 Future<List<VideoModel>> emptyDiscoveryPage(String _, {int page = 1}) async =>
     [];

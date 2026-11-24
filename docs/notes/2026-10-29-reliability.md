@@ -1,4 +1,4 @@
-# NovaPlay 可靠性改进
+# Banmaku 可靠性改进
 
 目标：落实审查中优先级最高的四项改进，保持现有 Flutter/Riverpod 架构与历史存储格式兼容。
 

@@ -1,23 +1,23 @@
-# Banmaku Windows 便携预览版
+# Banmaku Windows 安装与使用
 
 ## 单文件便携安装包
 
 - 下载名称以 `-windows-x64-portable.exe` 结尾的安装包及对应 `.sha256`，校验后双击。选择自己有写权限的文件夹或 U 盘目录。安装包以普通用户权限运行，应用所需的 VC++ DLL 随包提供。
-- 解压后从 `app\nova_play.exe` 启动。`UserData` 保存历史、收藏、设置、自定义片源和下载。换电脑或盘符时，先退出主窗口和所有播放器，再复制整个 Banmaku 文件夹。
+- 解压后从 `app\Banmaku.exe` 启动。`UserData` 保存历史、收藏、设置、自定义片源和下载。换电脑或盘符时，先退出主窗口和所有播放器，再复制整个 Banmaku 文件夹。
 - 可以在向导中选择首次启动时导入本机历史、设置和下载。原文件会保留。弹弹play 的 AppId 和 AppSecret 需在便携版重新填写。
-- 更新前退出主窗口和所有播放器，运行新版安装包并选择同一目录。更新只替换 `app`，保留 `UserData`。需要回退时先退出当前程序，再启动 `app.previous\nova_play.exe`。
+- 更新前退出主窗口和所有播放器，运行新版安装包并选择同一目录。更新只替换 `app`，保留 `UserData`。需要回退时先退出当前程序，再运行 `app.previous` 中的上一版程序。
 - 安装包未做代码签名。首次运行前请用 GitHub Releases 提供的 SHA-256 校验文件核对下载内容。[GitHub Releases](https://github.com/QIAN-SHU-QAQ/Banmaku/releases)
 
 ## ZIP 解压版
 
 - 当前便携包的验收目标是 Windows 11 x64。Windows 10 的兼容性待验证。
-- 运行预览包无需管理员权限、Flutter 或 Visual Studio。若提示缺少运行库，请安装微软提供的 x64 运行库。[Microsoft Visual C++ x64 可再发行程序包](https://aka.ms/vc14/vc_redist.x64.exe)
+- ZIP 版随包提供所需的 VC++ DLL，运行时无需管理员权限。
 
 1. 下载 ZIP 和对应的 `.sha256`。比较校验值后再解压。[GitHub Releases](https://github.com/QIAN-SHU-QAQ/Banmaku/releases)
-2. 将 ZIP 解压到新目录，例如 `D:\软件\Banmaku 预览版`。更新前先退出主窗口和所有播放窗口。
-3. 双击 `nova_play.exe`，保留同目录的 DLL 和 `data/`。便携包未做代码签名，Windows SmartScreen 可能提示「未知发布者」。
+2. 将 ZIP 解压到新目录，例如 `D:\软件\Banmaku`。更新前先退出主窗口和所有播放窗口。
+3. 双击 `Banmaku.exe`，保留同目录的 DLL 和 `data/`。便携包未做代码签名，Windows SmartScreen 可能提示「未知发布者」。
 
-Banmaku 从 `%APPDATA%\com.novaplay\nova_play` 读取历史、收藏、设置和自定义片源，包括旧版 NovaPlay 保存的数据。需要备份时，在退出应用后复制该目录。下载完成的文件默认位于系统「文档」目录内的 `NovaPlay\Downloads`。卸载时可删除解压目录，是否保留这两处用户数据由你决定。
+当前用户配置保存在 `%APPDATA%\Banmaku\Banmaku`。从旧版升级时，先关闭旧程序和播放器。首次运行会复制已有的历史、收藏、设置和任务记录。新下载保存在「文档」目录中的 `Banmaku\Downloads`，旧下载仍可从下载页打开。
 
 ## 查找和播放作品
 
@@ -25,7 +25,7 @@ Banmaku 从 `%APPDATA%\com.novaplay\nova_play` 读取历史、收藏、设置和
 2. 片源搜索同时查询所有启用的源。匹配的版本合并为一张作品卡片，明确不同的季或年份分别显示。若部分片源失败，可以继续使用已返回的结果，或点「重新查询」。
 3. 点开作品后，选择一个片源进入详情并选集。可先点「测试全部」，它会抽查当前作品每个版本的首个剧集。结果只反映该抽样请求，后续剧集和实际解码以播放结果为准。
 
-播放窗口是独立进程，关闭它后可以继续在主界面浏览。观看历史会记录片源和集数。从首页、历史或收藏续播时，应用会先从原片源刷新并定位原集。缺集或刷新失败时可重试，或在该片名下换源、重新选集。播放器无法确认起点时会保留原记录。[线上续播验收](https://github.com/QIAN-SHU-QAQ/NovaPlay/blob/main/docs/reviews/2026-11-06-online-acceptance-next-phase.md)
+播放窗口是独立进程，关闭它后可以继续在主界面浏览。观看历史会记录片源和集数。从首页、历史或收藏续播时，应用会先从原片源刷新并定位原集。缺集或刷新失败时可重试，或在该片名下换源、重新选集。播放器无法确认起点时会保留原记录。[线上续播验收](https://github.com/QIAN-SHU-QAQ/Banmaku/blob/main/docs/reviews/2026-11-06-online-acceptance-next-phase.md)
 
 ## 添加自定义片源
 

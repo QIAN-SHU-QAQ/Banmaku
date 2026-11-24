@@ -4,8 +4,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/services/m3u8/m3u8_downloader.dart';
-import 'package:nova_play/services/m3u8/m3u8_parser.dart';
+import 'package:banmaku/services/m3u8/m3u8_downloader.dart';
+import 'package:banmaku/services/m3u8/m3u8_parser.dart';
 
 /// 内存版 HTTP 适配器：按 URL 返回预设内容，支持 ETag/304 与请求头记录。
 class _FakeAdapter implements HttpClientAdapter {

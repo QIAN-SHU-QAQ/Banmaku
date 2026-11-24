@@ -1,11 +1,11 @@
 {
-    "name": "nova_play",
-    "short_name": "nova_play",
+    "name": "Banmaku",
+    "short_name": "Banmaku",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Banmaku 动漫聚合播放器。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

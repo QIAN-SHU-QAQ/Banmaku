@@ -4,9 +4,9 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/app.dart';
-import 'package:nova_play/providers/bangumi_provider.dart';
-import 'package:nova_play/services/bangumi_api.dart';
+import 'package:banmaku/app.dart';
+import 'package:banmaku/providers/bangumi_provider.dart';
+import 'package:banmaku/services/bangumi_api.dart';
 
 class _RecoveringAdapter implements HttpClientAdapter {
   bool online = false;
@@ -47,7 +47,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [bangumiApiProvider.overrideWithValue(BangumiApi(dio: dio))],
-        child: const NovaPlayApp(),
+        child: const BanmakuApp(),
       ),
     );
     await tester.pumpAndSettle();

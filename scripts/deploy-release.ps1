@@ -17,13 +17,13 @@ Usage (from the repo root):
 
   # explicit paths, skip shortcut
   powershell -ExecutionPolicy Bypass -File scripts\deploy-release.ps1 `
-      -TargetDir "D:\Apps\NovaPlay" -SkipShortcut
+      -TargetDir "D:\Apps\Banmaku" -SkipShortcut
 #>
 param(
     [string]$ProjectRoot = "",
     [string]$BuildDir = "",
     [string]$TargetDir = "",
-    [string]$Shortcut = "$env:USERPROFILE\Desktop\NovaPlay.lnk",
+    [string]$Shortcut = "$env:USERPROFILE\Desktop\Banmaku.lnk",
     [switch]$SkipShortcut
 )
 
@@ -175,7 +175,7 @@ if (Test-IsSameOrAncestor $TargetDir $ProjectRoot) {
     throw "TargetDir 不能是仓库根目录或其祖先目录：$TargetDir"
 }
 
-$exeSource = Join-Path $BuildDir "nova_play.exe"
+$exeSource = Join-Path $BuildDir "Banmaku.exe"
 if (-not (Test-Path -LiteralPath $exeSource -PathType Leaf)) {
     throw "找不到 Release 构建：$exeSource（请先执行 flutter build windows --release）"
 }
@@ -183,7 +183,10 @@ if (-not (Test-Path -LiteralPath (Join-Path $BuildDir "data") -PathType Containe
     throw "Release 构建缺少 data 目录：$BuildDir"
 }
 
-Get-Process nova_play -ErrorAction SilentlyContinue | Stop-Process -Force
+$targetExecutables = @((Join-Path $TargetDir 'Banmaku.exe'), (Join-Path $TargetDir 'nova_play.exe'))
+Get-Process Banmaku,nova_play -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -in $targetExecutables } |
+    Stop-Process -Force
 
 if (-not (Test-Path -LiteralPath $TargetDir)) {
     New-Item -ItemType Directory -Path $TargetDir | Out-Null
@@ -193,7 +196,7 @@ Get-ChildItem -LiteralPath $TargetDir -Force |
     Where-Object { $_.Name -ne "启动截图.png" } |
     Remove-Item -Recurse -Force
 
-Copy-Item -Path (Join-Path $BuildDir "*") -Destination $TargetDir -Recurse -Force
+Copy-Item -Path (Join-Path $BuildDir "*") -Destination $TargetDir -Recurse -Force -Exclude 'nova_play.exe'
 
 foreach ($doc in @("README.md", "LICENSE")) {
     $source = Join-Path $ProjectRoot $doc
@@ -214,7 +217,7 @@ if (-not $SkipShortcut -and -not [string]::IsNullOrWhiteSpace($Shortcut)) {
     if (-not (Test-Path -LiteralPath $shortcutDir -PathType Container)) {
         throw "快捷方式目录不存在：$shortcutDir"
     }
-    $exe = Join-Path $TargetDir "nova_play.exe"
+    $exe = Join-Path $TargetDir "Banmaku.exe"
     $shell = New-Object -ComObject WScript.Shell
     $link = $shell.CreateShortcut($Shortcut)
     $link.TargetPath = $exe

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/core/network/windows_proxy.dart';
+import 'package:banmaku/core/network/windows_proxy.dart';
 
 void main() {
   test(

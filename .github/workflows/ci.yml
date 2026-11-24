@@ -29,9 +29,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NOVAPLAY_PR: ${{ inputs.pr_number }}
-  NOVAPLAY_HEAD: ${{ inputs.head_sha }}
-  NOVAPLAY_BASE: ${{ inputs.base_sha }}
+  BANMAKU_PR: ${{ inputs.pr_number }}
+  BANMAKU_HEAD: ${{ inputs.head_sha }}
+  BANMAKU_BASE: ${{ inputs.base_sha }}
 
 jobs:
   automation-tests:
@@ -46,15 +46,15 @@ jobs:
       - name: Verify exact validation target
         shell: pwsh
         run: |
-          if ($env:NOVAPLAY_PR) {
-            if ($env:NOVAPLAY_PR -notmatch '^[1-9][0-9]*$' -or $env:NOVAPLAY_HEAD -notmatch '^[a-f0-9]{40}$' -or $env:NOVAPLAY_BASE -notmatch '^[a-f0-9]{40}$') { throw 'Invalid target' }
+          if ($env:BANMAKU_PR) {
+            if ($env:BANMAKU_PR -notmatch '^[1-9][0-9]*$' -or $env:BANMAKU_HEAD -notmatch '^[a-f0-9]{40}$' -or $env:BANMAKU_BASE -notmatch '^[a-f0-9]{40}$') { throw 'Invalid target' }
             $actualBase = git rev-parse HEAD
-            if ($LASTEXITCODE -ne 0 -or $actualBase -ne $env:NOVAPLAY_BASE) { throw 'Wrong main commit' }
-            git fetch --no-tags origin "refs/pull/$env:NOVAPLAY_PR/head"
+            if ($LASTEXITCODE -ne 0 -or $actualBase -ne $env:BANMAKU_BASE) { throw 'Wrong main commit' }
+            git fetch --no-tags origin "refs/pull/$env:BANMAKU_PR/head"
             if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch PR head' }
             $actualHead = git rev-parse FETCH_HEAD
-            if ($LASTEXITCODE -ne 0 -or $actualHead -ne $env:NOVAPLAY_HEAD) { throw 'PR head changed; request new validation' }
-            git -c user.name=novaplay-validation -c user.email=validation@users.noreply.github.com merge --no-ff --no-edit $env:NOVAPLAY_HEAD
+            if ($LASTEXITCODE -ne 0 -or $actualHead -ne $env:BANMAKU_HEAD) { throw 'PR head changed; request new validation' }
+            git -c user.name=banmaku-validation -c user.email=validation@users.noreply.github.com merge --no-ff --no-edit $env:BANMAKU_HEAD
             if ($LASTEXITCODE -ne 0) { throw 'PR cannot merge with the exact main commit; resolve conflicts' }
           }
       - name: Test automation policy
@@ -72,15 +72,15 @@ jobs:
       - name: Verify exact validation target
         shell: pwsh
         run: |
-          if ($env:NOVAPLAY_PR) {
-            if ($env:NOVAPLAY_PR -notmatch '^[1-9][0-9]*$' -or $env:NOVAPLAY_HEAD -notmatch '^[a-f0-9]{40}$' -or $env:NOVAPLAY_BASE -notmatch '^[a-f0-9]{40}$') { throw 'Invalid target' }
+          if ($env:BANMAKU_PR) {
+            if ($env:BANMAKU_PR -notmatch '^[1-9][0-9]*$' -or $env:BANMAKU_HEAD -notmatch '^[a-f0-9]{40}$' -or $env:BANMAKU_BASE -notmatch '^[a-f0-9]{40}$') { throw 'Invalid target' }
             $actualBase = git rev-parse HEAD
-            if ($LASTEXITCODE -ne 0 -or $actualBase -ne $env:NOVAPLAY_BASE) { throw 'Wrong main commit' }
-            git fetch --no-tags origin "refs/pull/$env:NOVAPLAY_PR/head"
+            if ($LASTEXITCODE -ne 0 -or $actualBase -ne $env:BANMAKU_BASE) { throw 'Wrong main commit' }
+            git fetch --no-tags origin "refs/pull/$env:BANMAKU_PR/head"
             if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch PR head' }
             $actualHead = git rev-parse FETCH_HEAD
-            if ($LASTEXITCODE -ne 0 -or $actualHead -ne $env:NOVAPLAY_HEAD) { throw 'PR head changed; request new validation' }
-            git -c user.name=novaplay-validation -c user.email=validation@users.noreply.github.com merge --no-ff --no-edit $env:NOVAPLAY_HEAD
+            if ($LASTEXITCODE -ne 0 -or $actualHead -ne $env:BANMAKU_HEAD) { throw 'PR head changed; request new validation' }
+            git -c user.name=banmaku-validation -c user.email=validation@users.noreply.github.com merge --no-ff --no-edit $env:BANMAKU_HEAD
             if ($LASTEXITCODE -ne 0) { throw 'PR cannot merge with the exact main commit; resolve conflicts' }
           }
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -109,15 +109,15 @@ jobs:
       - name: Verify exact validation target
         shell: pwsh
         run: |
-          if ($env:NOVAPLAY_PR) {
-            if ($env:NOVAPLAY_PR -notmatch '^[1-9][0-9]*$' -or $env:NOVAPLAY_HEAD -notmatch '^[a-f0-9]{40}$' -or $env:NOVAPLAY_BASE -notmatch '^[a-f0-9]{40}$') { throw 'Invalid target' }
+          if ($env:BANMAKU_PR) {
+            if ($env:BANMAKU_PR -notmatch '^[1-9][0-9]*$' -or $env:BANMAKU_HEAD -notmatch '^[a-f0-9]{40}$' -or $env:BANMAKU_BASE -notmatch '^[a-f0-9]{40}$') { throw 'Invalid target' }
             $actualBase = git rev-parse HEAD
-            if ($LASTEXITCODE -ne 0 -or $actualBase -ne $env:NOVAPLAY_BASE) { throw 'Wrong main commit' }
-            git fetch --no-tags origin "refs/pull/$env:NOVAPLAY_PR/head"
+            if ($LASTEXITCODE -ne 0 -or $actualBase -ne $env:BANMAKU_BASE) { throw 'Wrong main commit' }
+            git fetch --no-tags origin "refs/pull/$env:BANMAKU_PR/head"
             if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch PR head' }
             $actualHead = git rev-parse FETCH_HEAD
-            if ($LASTEXITCODE -ne 0 -or $actualHead -ne $env:NOVAPLAY_HEAD) { throw 'PR head changed; request new validation' }
-            git -c user.name=novaplay-validation -c user.email=validation@users.noreply.github.com merge --no-ff --no-edit $env:NOVAPLAY_HEAD
+            if ($LASTEXITCODE -ne 0 -or $actualHead -ne $env:BANMAKU_HEAD) { throw 'PR head changed; request new validation' }
+            git -c user.name=banmaku-validation -c user.email=validation@users.noreply.github.com merge --no-ff --no-edit $env:BANMAKU_HEAD
             if ($LASTEXITCODE -ne 0) { throw 'PR cannot merge with the exact main commit; resolve conflicts' }
           }
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2

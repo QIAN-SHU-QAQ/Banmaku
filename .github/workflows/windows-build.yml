@@ -104,7 +104,7 @@ jobs:
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
-          name: Banmaku-windows-preview
+          name: Banmaku-windows-x64
           path: |
             dist/*.exe
             dist/*.zip
@@ -123,7 +123,7 @@ jobs:
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4
         with:
-          name: Banmaku-windows-preview
+          name: Banmaku-windows-x64
           path: artifacts
 
       - name: Create draft release
@@ -142,5 +142,5 @@ jobs:
             --draft \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "Banmaku $tag (Windows preview)" \
+            --title "Banmaku $tag (Windows x64)" \
             --notes "Windows x64 便携安装包、ZIP 和 SHA-256。目标验收系统为 Windows 11 x64。使用说明在包内。此包由 CI 构建，发布前需验收。"

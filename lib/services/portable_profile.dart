@@ -27,7 +27,10 @@ class PortableProfile {
 
   /// Preserve the already initialized portable profile and the original files.
   /// Write preferences last so an interrupted import can safely be retried.
-  Future<bool> importLegacy(File source, Directory legacyDownloads) async {
+  Future<bool> importLegacy(
+    File source,
+    Iterable<Directory> sourceDownloads,
+  ) async {
     if (await preferences.exists() || !await source.exists()) return false;
     final values = await PortablePreferences.read(source);
     values.remove('flutter.danmaku_app_id');
@@ -41,7 +44,10 @@ class PortableProfile {
         final savePath = task['savePath'];
         if (savePath is! String ||
             !p.isAbsolute(savePath) ||
-            !p.equals(p.dirname(p.normalize(savePath)), legacyDownloads.path)) {
+            !sourceDownloads.any(
+              (directory) =>
+                  p.equals(p.dirname(p.normalize(savePath)), directory.path),
+            )) {
           continue;
         }
         final name = p.basename(savePath);

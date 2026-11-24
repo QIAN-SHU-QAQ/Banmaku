@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/features/player/fullscreen_session.dart';
+import 'package:banmaku/features/player/fullscreen_session.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

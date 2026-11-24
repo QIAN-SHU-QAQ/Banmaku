@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/features/download/download_screen.dart';
-import 'package:nova_play/providers/download_provider.dart';
-import 'package:nova_play/services/download_service.dart';
+import 'package:banmaku/features/download/download_screen.dart';
+import 'package:banmaku/providers/download_provider.dart';
+import 'package:banmaku/services/download_service.dart';
 
 class _Downloads extends DownloadService {
   _Downloads(this.tasks);

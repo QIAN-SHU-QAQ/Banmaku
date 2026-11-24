@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/core/network/http_client.dart';
-import 'package:nova_play/services/scraper/lziapi_scraper.dart';
-import 'package:nova_play/services/scraper/source_config.dart';
+import 'package:banmaku/core/network/http_client.dart';
+import 'package:banmaku/services/scraper/lziapi_scraper.dart';
+import 'package:banmaku/services/scraper/source_config.dart';
 
 class _Adapter implements HttpClientAdapter {
   _Adapter(this.respond);

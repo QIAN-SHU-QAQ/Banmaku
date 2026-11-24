@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/services/bangumi_api.dart';
+import 'package:banmaku/services/bangumi_api.dart';
 
 class _FakeAdapter implements HttpClientAdapter {
   _FakeAdapter(this.responses);

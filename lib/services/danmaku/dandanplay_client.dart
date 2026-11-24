@@ -91,7 +91,7 @@ class DandanplayClient {
       'X-AppId': appId,
       'X-Timestamp': '$timestamp',
       'X-Signature': signature(appId, timestamp, path, appSecret),
-      'User-Agent': 'NovaPlay/1.1 (Windows)',
+      'User-Agent': 'Banmaku/1.0 (Windows)',
       'Accept': 'application/json',
     };
   }

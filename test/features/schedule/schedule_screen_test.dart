@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nova_play/features/schedule/airing_schedule.dart';
-import 'package:nova_play/features/schedule/schedule_screen.dart';
+import 'package:banmaku/features/schedule/airing_schedule.dart';
+import 'package:banmaku/features/schedule/schedule_screen.dart';
 
 void main() {
   final today = DateTime(2026, 11, 19, 10);

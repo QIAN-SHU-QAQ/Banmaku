@@ -1,4 +1,4 @@
-# NovaPlay 下一阶段开发方向与验收要求
+# Banmaku 下一阶段开发方向与验收要求
 
 日期：2026-11-04。评估基线：`1f37108a45f4772e81d168523e20f6f432aa384b`。
 
@@ -33,7 +33,7 @@
 | 静态分析 | `flutter analyze`：无问题 |
 | 现有测试 | `flutter test --reporter expanded`：120 项通过 |
 | 针对边界问题的诊断 | 5 个独立样例均复现了下文描述的当前行为 |
-| GitHub CI | 本次查询最新提交的 CI 已成功；[运行记录](https://github.com/QIAN-SHU-QAQ/NovaPlay/actions/runs/41829252581) |
+| GitHub CI | 本次查询最新提交的 CI 已成功；[运行记录](https://github.com/QIAN-SHU-QAQ/Banmaku/actions/runs/41829252581) |
 | GitHub 发布状态 | 评估时查询没有公开 Release，也没有开放 PR 或 Issue |
 
 诊断样例的断言记录的是**当前缺陷行为**，通过表示问题被复现，不表示功能正确。样例使用内存 HTTP 替身、临时文件和 mock 配置；未请求真实片源或真实弹幕服务。
@@ -296,13 +296,13 @@ PR 验收记录使用下面的格式，未执行项明确保留：
 
 | 任务 | 状态 | 已有证据和待验收范围 |
 | --- | --- | --- |
-| R1 历史有序补交 | 已合入，关键场景实测通过 | [#7](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/7) 合入后完成双播放器两轮重连、离线日志清空、旧操作重传和主动回退。强制退出和多主窗口场景仍按 A1 单独验收。 |
-| R2 下载完整性 | 已合入，下载器在线实测通过 | [#8](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/8) 已合入，公开 TS 样片续传产物与完整下载哈希一致。应用退出后继续下载和真实清单变更留待专项验收。 |
-| R3 HLS 支持范围 | 已合入，部分实测 | [#8](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/8) 覆盖支持格式和拒绝规则，公开 TS 样片可本地解码。断网拖动、播到结尾及完整格式矩阵仍按 A3 验收。 |
-| R4 地址刷新续播 | 已合入，原生起点修复待交付 | [#9](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/9) 已实现刷新和原集定位。首页与历史入口的在线续播从片头播放并覆盖原进度，列为 P0。 |
-| R5 弹幕匹配与同步 | 已合入，真实服务待验收 | [#9](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/9) 已实现季号匹配和手动关联。实机确认缺凭据时仍可播放，真实鉴权和同步待专用凭据。 |
-| R6 配置桥协议 | 已合入，重连及协议实测通过 | [#7](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/7) 合入后实测拒绝无效会话与畸形批次，两轮重启均自动重连。 |
-| R7 Bangumi 资料 | 已合入，线上匹配待验收 | [#9](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/9) 已实现资料匹配和手动纠正。实测接口超时后仍可播放，空结果与窄布局的纠正入口待完善。 |
-| R8 Windows 预览版 | 打包已合入，待分发验收 | [#10](https://github.com/QIAN-SHU-QAQ/NovaPlay/pull/10) 已提供 CI 构建、便携 ZIP 和 SHA-256。预览版等待 P0 续播修复、干净机器及升级验收。 |
+| R1 历史有序补交 | 已合入，关键场景实测通过 | [#7](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/7) 合入后完成双播放器两轮重连、离线日志清空、旧操作重传和主动回退。强制退出和多主窗口场景仍按 A1 单独验收。 |
+| R2 下载完整性 | 已合入，下载器在线实测通过 | [#8](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/8) 已合入，公开 TS 样片续传产物与完整下载哈希一致。应用退出后继续下载和真实清单变更留待专项验收。 |
+| R3 HLS 支持范围 | 已合入，部分实测 | [#8](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/8) 覆盖支持格式和拒绝规则，公开 TS 样片可本地解码。断网拖动、播到结尾及完整格式矩阵仍按 A3 验收。 |
+| R4 地址刷新续播 | 已合入，原生起点修复待交付 | [#9](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/9) 已实现刷新和原集定位。首页与历史入口的在线续播从片头播放并覆盖原进度，列为 P0。 |
+| R5 弹幕匹配与同步 | 已合入，真实服务待验收 | [#9](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/9) 已实现季号匹配和手动关联。实机确认缺凭据时仍可播放，真实鉴权和同步待专用凭据。 |
+| R6 配置桥协议 | 已合入，重连及协议实测通过 | [#7](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/7) 合入后实测拒绝无效会话与畸形批次，两轮重启均自动重连。 |
+| R7 Bangumi 资料 | 已合入，线上匹配待验收 | [#9](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/9) 已实现资料匹配和手动纠正。实测接口超时后仍可播放，空结果与窄布局的纠正入口待完善。 |
+| R8 Windows 预览版 | 打包已合入，待分发验收 | [#10](https://github.com/QIAN-SHU-QAQ/Banmaku/pull/10) 已提供 CI 构建、便携 ZIP 和 SHA-256。预览版等待 P0 续播修复、干净机器及升级验收。 |
 
 当前优先修复 **R4 原生续播起点和历史写入保护**，按 [下一阶段计划](2026-11-06-online-acceptance-next-phase.md) 提交复现、改动和专项验收结果。

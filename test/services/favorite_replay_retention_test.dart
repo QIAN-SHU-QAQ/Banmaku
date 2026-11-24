@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/models/video_model.dart';
-import 'package:nova_play/services/database_service.dart';
-import 'package:nova_play/services/prefs_bridge.dart';
+import 'package:banmaku/models/video_model.dart';
+import 'package:banmaku/services/database_service.dart';
+import 'package:banmaku/services/prefs_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

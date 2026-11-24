@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nova_play/core/utils/history_resume.dart';
-import 'package:nova_play/models/history_item.dart';
-import 'package:nova_play/models/video_model.dart';
+import 'package:banmaku/core/utils/history_resume.dart';
+import 'package:banmaku/models/history_item.dart';
+import 'package:banmaku/models/video_model.dart';
 
 EpisodeModel _episode(String id, String title, String url, {String? playUrl}) {
   return EpisodeModel(id: id, title: title, url: url, playUrl: playUrl);

@@ -1,20 +1,15 @@
-# Banmaku 1.0.0 Preview 2
+# Banmaku 1.0.0
 
-Banmaku（原 NovaPlay）是 Windows 动漫聚合播放器。本次预览将发现和作品搜索接入 Bangumi 动画作品库，并提供按作品选择播放来源的流程。
+## Windows x64 下载
 
-## 变更
+- **便携安装包**。双击 EXE 并选择可写目录。解压后从 `app\Banmaku.exe` 启动，观看记录、收藏、设置和下载随整个文件夹移动。
+- **ZIP 解压版**。解压后运行 `Banmaku.exe`。首次从旧版升级时会复制当前 Windows 用户的已有配置，旧下载可以按原记录打开。
+- 两种下载均附 SHA-256 校验文件和应用所需的 VC++ DLL。验收目标为 Windows 11 x64，安装包未签名。[发布页](https://github.com/QIAN-SHU-QAQ/Banmaku/releases/latest) · [完整使用说明](preview-usage.md)
 
-- 在发现页按「国产动漫」和「日本动漫」浏览，或搜索作品并查看预览。从预览选择「查找片源」，也可直接打开「按片源搜索」。
-- 片源搜索同时查询已启用的片源。匹配的版本合并到同一张作品卡片，明确不同的季或年份分别显示。选择卡片后可比较片源，再进入详情选集。
-- 「测试全部」抽查该作品在各版本中的首个剧集。HLS 会抽查播放列表和一个媒体分片，直链会抽查文件开头。
-- 在「设置 → 源管理 → 添加自定义源」填写 MacCMS API 地址。自定义配置保存在本机。
+## 本版更新
 
-## 下载与升级
+- 程序文件名、安装向导、应用图标和 Windows 版本信息统一使用 Banmaku。
+- 便携安装包支持同目录升级，保留用户数据和上一版程序。
+- 从 Bangumi 发现和搜索动画，按作品查询多个片源，并可续播、下载和离线观看。
 
-- 便携包 `Banmaku-1.0.0-preview.2-windows-x64.zip` 和对应的 `.sha256`。当前验收目标是 Windows 11 x64。Windows 10 的兼容性待验证。
-- 核对 SHA-256 后解压，运行 `nova_play.exe`。便携包未做代码签名，SmartScreen 可能提示「未知发布者」。包内 `使用说明.md` 包含校验和操作步骤。
-- 更新时关闭主窗口和所有播放器，把 ZIP 解压到新目录。观看历史、收藏、设置和自定义片源保存在 `%APPDATA%\com.novaplay\nova_play`，Banmaku 会从这里读取原 NovaPlay 数据。
-
-真实片源和弹弹play 的可用性取决于外部服务。弹幕需要自己的弹弹play AppId 和 AppSecret。「测试全部」的抽样结果只覆盖首集的网络请求，完整播放以实际解码为准。
-
-报告问题时，请附上 Windows 版本、ZIP 的 SHA-256 和复现步骤。播放问题请同时注明作品、片源和集数。请勿提交个人凭据。[提交问题](https://github.com/QIAN-SHU-QAQ/NovaPlay/issues)
+报告问题时，请附上 Windows 版本、安装包 SHA-256 和复现步骤。涉及播放时补充作品、片源和集数。[提交问题](https://github.com/QIAN-SHU-QAQ/Banmaku/issues)
