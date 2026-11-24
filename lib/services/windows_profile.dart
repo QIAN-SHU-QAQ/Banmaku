@@ -5,11 +5,14 @@ import 'package:path_provider_windows/path_provider_windows.dart';
 
 const _preferences = 'shared_preferences.json';
 
+// FOLDERID_RoamingAppData. Use the GUID so the path provider's analysis stub
+// can type-check this call alongside the native implementation.
+Future<String?> _roamingAppData() =>
+    PathProviderWindows().getPath('{3EB685DB-65F9-4CF6-A03A-E3EF65729F3D}');
+
 // The preview executable used these names in its Windows version resource.
 Future<Directory?> legacyWindowsSupportDirectory() async {
-  final roaming = await PathProviderWindows().getPath(
-    WindowsKnownFolder.RoamingAppData,
-  );
+  final roaming = await _roamingAppData();
   return roaming == null
       ? null
       : Directory(p.join(roaming, 'com.novaplay', 'nova_play'));
@@ -53,8 +56,9 @@ Future<void> migrateWindowsProfile({
       }
     }
     final oldPreferences = File(p.join(legacy.path, _preferences));
-    if (await oldPreferences.exists())
+    if (await oldPreferences.exists()) {
       await _copyAtomically(oldPreferences, preferences);
+    }
     await marker.create();
   } finally {
     await lock.close();
